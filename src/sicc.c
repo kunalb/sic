@@ -52,6 +52,11 @@ void* checked_malloc(size_t sz) {
 // ==== Source files ====
 
 SrcFile* srcfile_open(char *name) {
+  FILE *fp = fopen(name, "r");
+  if (fp == NULL) {
+    return NULL;
+  }
+
   SrcFile *srcfile = calloc(1, sizeof(SrcFile));
 
   size_t namelen = strnlen(name, FILENAME_MAX);
@@ -60,7 +65,7 @@ SrcFile* srcfile_open(char *name) {
   srcfile->name[namelen] = '\0';
 
   srcfile->line = 0;
-  srcfile->fp = fopen(name, "r");
+  srcfile->fp = fp;
   srcfile->eof = false;
 
   return srcfile;
@@ -120,7 +125,13 @@ void parse(char* filename) {
 }
 
 
+// === Transplite ===
+void transpile(char *infile, char* outfile) {
+}
+
+
 #ifndef TEST
+// === Main ===
 
 int main(int argc, char** argv) {
   if (argc < 1) {
@@ -132,7 +143,6 @@ int main(int argc, char** argv) {
 }
 
 #else
-
 // === Tests ===
 
 void test_src_file_reads() {
