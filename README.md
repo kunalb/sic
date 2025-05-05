@@ -1,7 +1,7 @@
 # The (sic) Programming Language
-## S-Expressions in C
+## Symbolic-Expressions in C; *intentionally so*
 
-`(sic)` is a minimal, extremely extensible programming language -- that transpiels to modern C -- aimed at solo hackers or small teams for rapid prototyping and quickly building reusable applications.
+`(sic)` aims to be a minimal, extremely extensible programming language -- that transpiles to modern C -- aimed at solo hackers or small teams for rapid prototyping and quickly building reusable applications.
 
 ## Design principles
 - Minimal core footprint; with all layers implemented within the language.
