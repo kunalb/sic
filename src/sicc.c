@@ -1,6 +1,11 @@
+#define _POSIX_C_SOURCE 200809L
+
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
+#include <unistd.h>
 
 
 // === Headers & Data Structures ===
@@ -18,19 +23,21 @@ enum State {
 struct SrcFile {
   char* name;
   FILE* fp;
-  size_t line;
+  size_t row;
+  size_t col;
   bool eof;
 };
 typedef struct SrcFile SrcFile;
-
 
 struct CCode {
   char* lines;
 };
 
 struct SExp {
-
+  size_t start_row;
+  size_t start_col;
 };
+typedef struct SExp SExp;
 
 struct Transpiler {
 };
@@ -38,16 +45,16 @@ struct Transpiler {
 // === Implementations ===
 
 // ==== Utilities ====
-void* checked_malloc(size_t sz) {
-  void *ptr = malloc(sz);
-  if (ptr == NULL) {
-    fprintf(stderr, "Could not allocate %lu bytes of memory! Exiting.", sz);
-    exit(1);
-  }
-
-  return ptr;
-}
-
+#define CHECK_ALLOC(ptr)					\
+  ({								\
+    void *_tmp_ptr = (ptr);					\
+    if (_tmp_ptr == NULL) {					\
+      fprintf(stderr, "error: " __FILE__ ":%d "			\
+	      "Couldn't allocate memory! Exiting.", __LINE__);	\
+      exit(1);							\
+    }								\
+    _tmp_ptr;							\
+  })
 
 // ==== Source files ====
 
@@ -57,14 +64,17 @@ SrcFile* srcfile_open(char *name) {
     return NULL;
   }
 
-  SrcFile *srcfile = calloc(1, sizeof(SrcFile));
+  SrcFile *srcfile = CHECK_ALLOC(calloc(1, sizeof(SrcFile)));
 
   size_t namelen = strnlen(name, FILENAME_MAX);
-  srcfile->name = checked_malloc((namelen + 1) * sizeof(char));
+  srcfile->name = CHECK_ALLOC(malloc((namelen + 1) * sizeof(char)));
+
   memcpy(srcfile->name, name, namelen);
   srcfile->name[namelen] = '\0';
 
-  srcfile->line = 0;
+  srcfile->row = 0;
+  srcfile->col = 0;
+
   srcfile->fp = fp;
   srcfile->eof = false;
 
@@ -77,10 +87,20 @@ void srcfile_close(SrcFile *srcfile) {
   free(srcfile);
 }
 
+int srcfile_peek(SrcFile *srcfile) {
+  int ch = fgetc(srcfile->fp);
+  if (ch != EOF) {
+    ungetc(ch, srcfile->fp);
+  }
+  return ch;
+}
+
 int srcfile_getc(SrcFile *srcfile) {
   int ch = fgetc(srcfile->fp);
+  srcfile->col++;
   if (ch == '\n') {
-    srcfile->line++;
+    srcfile->row++;
+    srcfile->col = 0;
   } else if (ch == EOF) {
     srcfile->eof = true;
   }
@@ -95,33 +115,46 @@ bool srcfile_finished_p(SrcFile* srcfile) {
 
 // ==== Output Code ====
 
-void begin_transpiling() {}
-void consume_sexp() {}
+void consume_sexp(SrcFile* f) {
+  SExp s_exp;
+  s_exp.start_row = f->row;
+  s_exp.start_col = f->col;
+
+  int start = srcfile_getc(f);
+  assert(start == '(');
+
+  // Share the loop for tokenizing the stream
+  // set up shared state for parsed tokens
+}
+
 void consume_dq_str() {}
 void consume_sq_str() {}
 void consume_number() {}
 void consume_whitespace() {}
 
-void tokenize(FILE* f) {
+void tokenize(SrcFile* f) {
   int ch;
   enum State state = BEGIN;
-  while ((ch = fgetc(f)) != EOF) {
-    printf("%c", ch);
-    switch (state) {
-
+  while ((ch = srcfile_peek(f)) != EOF) {
+    switch (ch) {
+    case '(':
+      consume_sexp(f);
+      break;
+    default:
+      printf("%c", srcfile_getc(f));
     }
   }
 }
 
 void parse(char* filename) {
-  FILE* f = fopen(filename, "r");
+  SrcFile *f = srcfile_open(filename);
   if (f == NULL) {
     fprintf(stderr, "error: Unable to access file %s.", filename);
     exit(EXIT_FAILURE);
   }
 
   tokenize(f);
-  fclose(f);
+  srcfile_close(f);
 }
 
 
@@ -158,9 +191,15 @@ void test_src_file_reads() {
   srcfile_close(src);
 }
 
+
+void test_parse() {
+  parse("hello.sic");
+}
+
 int main(int argc, char** argv) {
   printf("=== Testing sicc! ===\n");
-  test_src_file_reads();
+  // test_src_file_reads();
+  test_parse();
 }
 
 
