@@ -19,6 +19,7 @@ enum State {
   IN_NUMBER,
   IN_WHITESPACE,
 };
+typedef enum State State;
 
 struct SrcFile {
   char* name;
@@ -115,7 +116,9 @@ bool srcfile_finished_p(SrcFile* srcfile) {
 
 // ==== Output Code ====
 
-void consume_sexp(SrcFile* f) {
+void consume_next(SrcFile *f, State state);
+
+void consume_sexp(SrcFile *f) {
   SExp s_exp;
   s_exp.start_row = f->row;
   s_exp.start_col = f->col;
@@ -123,28 +126,39 @@ void consume_sexp(SrcFile* f) {
   int start = srcfile_getc(f);
   assert(start == '(');
 
-  // Share the loop for tokenizing the stream
-  // set up shared state for parsed tokens
+  consume_next(f, IN_SEXP);
+}
+
+void consume_symbol(SrcFile *f) {
 }
 
 void consume_dq_str() {}
 void consume_sq_str() {}
 void consume_number() {}
-void consume_whitespace() {}
 
-void tokenize(SrcFile* f) {
+void consume_next(SrcFile *f, State state) {
   int ch;
-  enum State state = BEGIN;
   while ((ch = srcfile_peek(f)) != EOF) {
     switch (ch) {
+    case ' ':
+    case '\n':
+      srcfile_getc(f);
+      break;
     case '(':
       consume_sexp(f);
       break;
+    case ')':
+      if (state == IN_SEXP) return;
+      // Maybe make this an error
     default:
+      consume_symbol(f);
       printf("%c", srcfile_getc(f));
     }
   }
+
+  srcfile_getc(f);
 }
+
 
 void parse(char* filename) {
   SrcFile *f = srcfile_open(filename);
@@ -153,7 +167,11 @@ void parse(char* filename) {
     exit(EXIT_FAILURE);
   }
 
-  tokenize(f);
+  SExp parsed[128];
+
+  while (!f->eof) {
+    consume_next(f, BEGIN);
+  }
   srcfile_close(f);
 }
 
