@@ -10,6 +10,14 @@
 
 // === Headers & Data Structures ===
 
+typedef enum State State;
+typedef enum Tag Tag;
+typedef struct Obj Obj;
+typedef struct SrcFile SrcFile;
+typedef struct Pos Pos;
+typedef struct Parser Parser;
+typedef struct List List;
+
 enum State {
   BEGIN,
   IN_SEXP,
@@ -19,7 +27,6 @@ enum State {
   IN_NUMBER,
   IN_WHITESPACE,
 };
-typedef enum State State;
 
 struct SrcFile {
   char* name;
@@ -28,19 +35,43 @@ struct SrcFile {
   size_t col;
   bool eof;
 };
-typedef struct SrcFile SrcFile;
 
 struct CCode {
   char* lines;
 };
 
-struct SExp {
-  size_t start_row;
-  size_t start_col;
+struct Pos {
+  size_t row;
+  size_t col;
 };
-typedef struct SExp SExp;
 
-struct Transpiler {
+enum Tag {
+  SEXP,
+  SYM,
+  STR,
+  NUM,
+};
+
+struct List {
+  Obj **buffer;
+  size_t buffer_len;
+  size_t len;
+};
+
+struct Obj {
+  Pos beg;
+  Pos end;
+
+  Tag tag;
+  union {
+    char *val;
+    List children;
+  };
+};
+
+struct Parser {
+  List list;
+  State state;
 };
 
 // === Implementations ===
@@ -114,14 +145,46 @@ bool srcfile_finished_p(SrcFile* srcfile) {
 }
 
 
-// ==== Output Code ====
+// ==== List handling ====
+
+List list_init() {
+  return (List){ .len = 0, .buffer = NULL, .buffer_len = 0 };
+}
+
+void list_resize(List *l, size_t buffer_len) {
+  if (l->buffer != NULL) {
+    l->buffer = CHECK_ALLOC(realloc(l->buffer, buffer_len * sizeof(Obj*)));
+  } else {
+    l->buffer = CHECK_ALLOC(malloc(buffer_len * sizeof(Obj*)));
+  }
+  l->buffer_len = buffer_len;
+}
+
+void list_add(List *list, Obj *obj) {
+  if (list->len >= list->buffer_len) {
+    size_t new_size = list->buffer_len == 0 ? 8 : list->buffer_len * 2;
+    list_resize(list, new_size);
+  }
+
+  list->buffer[list->len++] = obj;
+}
+
+void list_free(List *l) {
+  for (int i = 0; i < l->len; i++) {
+    free(l->buffer[i]);
+  }
+  free(l->buffer);
+}
+
+
+// ==== Parser ====
 
 void consume_next(SrcFile *f, State state);
 
 void consume_sexp(SrcFile *f) {
-  SExp s_exp;
-  s_exp.start_row = f->row;
-  s_exp.start_col = f->col;
+  // SExp s_exp;
+  // s_exp.start_row = f->row;
+  // s_exp.start_col = f->col;
 
   int start = srcfile_getc(f);
   assert(start == '(');
@@ -160,14 +223,12 @@ void consume_next(SrcFile *f, State state) {
 }
 
 
-void parse(char* filename) {
+void parser_parse(Parser *parser, char* filename) {
   SrcFile *f = srcfile_open(filename);
   if (f == NULL) {
     fprintf(stderr, "error: Unable to access file %s.", filename);
     exit(EXIT_FAILURE);
   }
-
-  SExp parsed[128];
 
   while (!f->eof) {
     consume_next(f, BEGIN);
@@ -176,8 +237,16 @@ void parse(char* filename) {
 }
 
 
+Parser parser_init(char *filename) {
+  return (Parser) {
+    .list = list_init(),
+    .state = BEGIN,
+  };
+}
+
+
 // === Transplite ===
-void transpile(char *infile, char* outfile) {
+void transpile(List *list) {
 }
 
 
@@ -190,11 +259,12 @@ int main(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-  parse(argv[1]);
+  parser_parse(argv[1]);
 }
 
 #else
 // === Tests ===
+// Very coarse tests for now, will refactor later
 
 void test_src_file_reads() {
   SrcFile *src = srcfile_open("hello.sic");
@@ -209,6 +279,26 @@ void test_src_file_reads() {
   srcfile_close(src);
 }
 
+void test_list_management() {
+  List list = list_init();
+
+  Obj *o = CHECK_ALLOC(calloc(2, sizeof(Obj*)));
+  for (int i = 0; i < list.len; i++) {
+    list_add(&list, &o[i]);
+  }
+
+  for (int i = 0; i < list.len; i++) {
+    assert(list.buffer[i] == &o[i]);
+  }
+
+  list_resize(&list, 10);
+  for (int i = 0; i < list.len; i++) {
+    assert(list.buffer[i] == &o[i]);
+  }
+
+  list_free(&list);
+  free(o);
+}
 
 void test_parse() {
   parse("hello.sic");
@@ -217,6 +307,7 @@ void test_parse() {
 int main(int argc, char** argv) {
   printf("=== Testing sicc! ===\n");
   // test_src_file_reads();
+  // test_list_management();
   test_parse();
 }
 
