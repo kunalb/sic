@@ -40,10 +40,6 @@ struct CCode {
   char* lines;
 };
 
-struct Pos {
-  size_t row;
-  size_t col;
-};
 
 enum Tag {
   SEXP,
@@ -59,19 +55,23 @@ struct List {
 };
 
 struct Obj {
-  Pos beg;
-  Pos end;
+  size_t row;
+  size_t col;
+  size_t len;
 
   Tag tag;
   union {
-    char *val;
-    List children;
+    char *sym;
+    char *str;
+    char *num;
+    List *sexp;
   };
 };
 
 struct Parser {
-  List list;
   State state;
+  List *list;
+  SrcFile *srcfile;
 };
 
 // === Implementations ===
@@ -144,11 +144,14 @@ bool srcfile_finished_p(SrcFile* srcfile) {
   return srcfile->eof;
 }
 
-
 // ==== List handling ====
 
-List list_init() {
-  return (List){ .len = 0, .buffer = NULL, .buffer_len = 0 };
+List* list_init() {
+  List *list = CHECK_ALLOC(malloc(sizeof(List)));
+  list->len = 0;
+  list->buffer = NULL;
+  list->buffer_len = 0;
+  return list;
 }
 
 void list_resize(List *l, size_t buffer_len) {
@@ -174,6 +177,34 @@ void list_free(List *l) {
     free(l->buffer[i]);
   }
   free(l->buffer);
+  free(l);
+}
+
+
+// ==== Objects ====
+
+Obj* obj_init(Tag tag) {
+  Obj *obj = CHECK_ALLOC(malloc(sizeof(Obj)));
+  obj->row = 0;
+  obj->col = 0;
+  obj->len = 0;
+  obj->tag = tag;
+  return obj;
+}
+
+void obj_free(Obj *obj) {
+  switch (obj->tag) {
+  case SEXP:
+    list_free(obj->sexp);
+  case SYM:
+    free(obj->sym);
+  case STR:
+    free(obj->str);
+  case NUM:
+    free(obj->num);
+  };
+
+  free(obj);
 }
 
 
@@ -223,25 +254,29 @@ void consume_next(SrcFile *f, State state) {
 }
 
 
-void parser_parse(Parser *parser, char* filename) {
-  SrcFile *f = srcfile_open(filename);
-  if (f == NULL) {
-    fprintf(stderr, "error: Unable to access file %s.", filename);
+void parser_parse(Parser *parser) {
+  if (parser->srcfile == NULL) {
+    fprintf(stderr, "error: Unable to access file %s.", parser->srcfile->name);
     exit(EXIT_FAILURE);
   }
 
-  while (!f->eof) {
-    consume_next(f, BEGIN);
+  while (!parser->srcfile->eof) {
+    consume_next(parser->srcfile, BEGIN);
   }
-  srcfile_close(f);
 }
 
 
-Parser parser_init(char *filename) {
-  return (Parser) {
-    .list = list_init(),
-    .state = BEGIN,
-  };
+Parser* parser_init(char *filename) {
+  Parser *parser = CHECK_ALLOC(malloc(sizeof(Parser)));
+  parser->srcfile = srcfile_open(filename);
+  parser->list = list_init();
+  parser->state = BEGIN;
+  return parser;
+}
+
+void parser_free(Parser *parser) {
+  list_free(parser->list);
+  free(parser);
 }
 
 
@@ -259,7 +294,9 @@ int main(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-  parser_parse(argv[1]);
+  Parser *parser = parser_init(argv[1]);
+  parser_parse(parser);
+  parser_free(parser);
 }
 
 #else
@@ -280,28 +317,30 @@ void test_src_file_reads() {
 }
 
 void test_list_management() {
-  List list = list_init();
+  List *list = list_init();
 
   Obj *o = CHECK_ALLOC(calloc(2, sizeof(Obj*)));
-  for (int i = 0; i < list.len; i++) {
-    list_add(&list, &o[i]);
+  for (int i = 0; i < list->len; i++) {
+    list_add(list, &o[i]);
   }
 
-  for (int i = 0; i < list.len; i++) {
-    assert(list.buffer[i] == &o[i]);
+  for (int i = 0; i < list->len; i++) {
+    assert(list->buffer[i] == &o[i]);
   }
 
-  list_resize(&list, 10);
-  for (int i = 0; i < list.len; i++) {
-    assert(list.buffer[i] == &o[i]);
+  list_resize(list, 10);
+  for (int i = 0; i < list->len; i++) {
+    assert(list->buffer[i] == &o[i]);
   }
 
-  list_free(&list);
+  list_free(list);
   free(o);
 }
 
 void test_parse() {
-  parse("hello.sic");
+  Parser *parser = parser_init("hello.sic");
+  parser_parse(parser);
+  parser_free(parser);
 }
 
 int main(int argc, char** argv) {
