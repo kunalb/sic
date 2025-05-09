@@ -21,6 +21,7 @@ typedef struct Parser Parser;
 typedef struct List List;
 typedef struct Atom Atom;
 typedef struct Result Result;
+typedef struct CCode CCode;
 
 struct Pos {
   size_t row;
@@ -35,7 +36,9 @@ struct SrcFile {
 };
 
 struct CCode {
-  char* lines;
+  char** lines;
+  size_t count;
+  size_t buffer;
 };
 
 enum Tag {
@@ -243,17 +246,19 @@ void list_free(List *l) {
 void list_print(List *l, size_t indent) {
   size_t num_width = 1 + (size_t) log10(l->len);
   char formatstr[100];
-  snprintf(formatstr, 100, "%%%zus%%%zuzu: %%s\n", indent, num_width);
+  snprintf(formatstr, 100, "%%%zus%%%zuzu: %%s [%%zu, %%zu] -> [%%zu, %%zu]\n", indent, num_width);
 
   for (size_t i = 0; i < l->len; i++) {
-    switch (l->buffer[i]->tag) {
+    Obj *o = l->buffer[i];
+    switch (o->tag) {
     case SEXP:
-      printf(formatstr, "", i, "(");
-      list_print(l->buffer[i]->sexp, indent + 2);
-      printf(formatstr, "", i, ")");
+      printf(formatstr, "", i, "(", o->beg.row, o->beg.col, o->end.row, o->end.col);
+      list_print(o->sexp, indent + 2);
+      printf(formatstr, "", i, ")", o->beg.row, o->beg.col, o->end.row, o->end.col);
       break;
     case ATOM:
-      printf(formatstr, "", i, l->buffer[i]->atom->buffer);
+      printf(formatstr, "", i, o->atom->buffer,
+	     o->beg.row, o->beg.col, o->end.row, o->end.col);
       break;
     }
   }
@@ -383,9 +388,91 @@ void parser_free(Parser *parser) {
   free(parser);
 }
 
+// === Output behavior ===
+
+CCode* ccode_init() {
+  CCode *code = CHECK_ALLOC(malloc(sizeof(CCode)));
+  code->lines = NULL;
+  code->buffer = 0;
+  code->count = 0;
+  return code;
+}
+
+void ccode_free(CCode *code) {
+  for (size_t i = 0; i < code->count; i++) {
+    free(code->lines[i]);
+  }
+  free(code->lines);
+  free(code);
+}
+
+void ccode_resize(CCode *code, size_t size) {
+  if (code->lines == NULL) {
+    code->lines = CHECK_ALLOC(calloc(size, sizeof(char*)));
+  } else {
+    code->lines = CHECK_ALLOC(realloc(code->lines, sizeof(char*) * size));
+  }
+
+  code->buffer = size;
+}
+
+char* ccode_alloc_line(CCode *code, size_t size) {
+  if (code->count >= code->buffer) {
+    ccode_resize(code, code->buffer == 0 ? 8 : code->buffer * 2);
+  }
+
+  char *line = CHECK_ALLOC(malloc(sizeof(char) * size));
+  code->lines[code->count++] = line;
+  return line;
+}
+
+void ccode_write(CCode *code, FILE *stream) {
+  for (size_t i = 0; i < code->count; i++) {
+    fprintf(stream, "%s\n", code->lines[i]);
+  }
+}
+
 
 // === Transpiler ===
-void transpile(List *list) {
+
+void transpile_include(Obj *o, CCode *code) {
+  assert(o->sexp->len == 2);
+  assert(o->sexp->buffer[1]->tag == ATOM);
+  Atom *atom = o->sexp->buffer[1]->atom;
+  size_t maxlen = 8 + atom->len + 1;
+  char *line = ccode_alloc_line(code, maxlen);
+  snprintf(line, maxlen, "#include %s", atom->buffer);
+}
+
+void transpile_fn() {
+}
+
+void transpile_call() {
+}
+
+CCode* transpile(List *list) {
+  CCode *code = ccode_init();
+  for (size_t i = 0; i < list->len; i++) {
+    Obj *o = list->buffer[i];
+
+    if (o->tag == SEXP) {
+      if (o->sexp->len == 0)
+	continue;
+
+      Obj *elem = o->sexp->buffer[0];
+      if (elem->tag == ATOM) {
+	if (strncmp("#include", elem->atom->buffer, 8) == 0) {
+	  transpile_include(o, code);
+	}
+      } else {
+	X("Unhandled nested sexp");
+      }
+    } else {
+      assert(false);
+    }
+  }
+
+  return code;
 }
 
 
@@ -441,18 +528,24 @@ void test_list_management() {
   free(o);
 }
 
-void test_parse() {
+void test_transpile() {
   Parser *parser = parser_init("hello.sic");
   parser_parse(parser);
   parser_print(parser);
+  CCode *code = transpile(parser->list);
   parser_free(parser);
+
+
+  printf("\n\n");
+  ccode_write(code, stdout);
+  ccode_free(code);
 }
 
 int main(int argc, char** argv) {
   printf("=== Testing sicc! ===\n");
   // test_src_file_reads();
   // test_list_management();
-  test_parse();
+  test_transpile();
 }
 
 
