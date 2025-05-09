@@ -2,4 +2,4 @@
 
 (fn main :int (argc :int argv :char**)
   (printf "hello, world!")
-  0)
+  (return 0))

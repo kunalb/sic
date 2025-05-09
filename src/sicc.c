@@ -434,6 +434,7 @@ void ccode_write(CCode *code, FILE *stream) {
 
 
 // === Transpiler ===
+// Feeling this out, will need to be dramatically rewritten
 
 void transpile_include(Obj *o, CCode *code) {
   assert(o->sexp->len == 2);
@@ -444,10 +445,61 @@ void transpile_include(Obj *o, CCode *code) {
   snprintf(line, maxlen, "#include %s", atom->buffer);
 }
 
-void transpile_fn() {
+// (fn name :type (arg1 :type1 arg2 :type2 ...) ...)
+void transpile_fn(Obj *o, CCode *code) {
+  Obj **b = o->sexp->buffer;
+
+  assert(o->sexp->len >= 5);
+  assert(b[1]->tag == ATOM);
+  assert(b[2]->tag == ATOM);
+  assert(b[3]->tag == SEXP);
+
+  size_t len = 2;
+  for (size_t i = 1; i <= 2; i++)
+    len += b[i]->atom->len + 1;
+
+  for (size_t i = 0; i < b[3]->sexp->len; i++) {
+    len += b[3]->sexp->buffer[i]->atom->len + 1;
+  }
+
+  char *line = ccode_alloc_line(code, len);
+
+  size_t w = 0;
+  for (size_t i = 1; i < b[2]->atom->len - 1; i++) {
+    line[w++] = b[2]->atom->buffer[i]; // Skip the :
+  }
+
+  line[w++] = ' ';
+
+  for (size_t i = 0; i < b[1]->atom->len - 1; i++) {
+    line[w++] = b[1]->atom->buffer[i];
+  }
+
+  line[w++] = '(';
+  for (size_t j = 0; j < b[3]->sexp->len; j+=2) {
+    for (size_t k = 1; k < b[3]->sexp->buffer[j + 1]->atom->len - 1; k++) {
+      line[w++] = b[3]->sexp->buffer[j + 1]->atom->buffer[k];
+    }
+    line[w++] = ' ';
+    for (size_t k = 0; k < b[3]->sexp->buffer[j]->atom->len - 1; k++) {
+      line[w++] = b[3]->sexp->buffer[j]->atom->buffer[k];
+    }
+    line[w++] = ',';
+    line[w++] = ' ';
+  }
+  w -= 2;
+  line[w++] = ')';
+  line[w++] = ' ';
+  line[w++] = '{';
+  line[w++] = '\0';
+
+
+  char *endline = ccode_alloc_line(code, 2);
+  endline[0] = '}';
+  endline[1] = '\0';
 }
 
-void transpile_call() {
+void transpile_call(Obj *o, CCode *code) {
 }
 
 CCode* transpile(List *list) {
@@ -463,6 +515,10 @@ CCode* transpile(List *list) {
       if (elem->tag == ATOM) {
 	if (strncmp("#include", elem->atom->buffer, 8) == 0) {
 	  transpile_include(o, code);
+	} else if (strncmp("fn", elem->atom->buffer, 2) == 0) {
+	  transpile_fn(o, code);
+	} else {
+	  transpile_call(o, code);
 	}
       } else {
 	X("Unhandled nested sexp");
