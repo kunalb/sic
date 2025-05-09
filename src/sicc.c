@@ -1,51 +1,46 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <assert.h>
+#include <ctype.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 
 // === Headers & Data Structures ===
 
-typedef enum State State;
 typedef enum Tag Tag;
 typedef struct Obj Obj;
 typedef struct SrcFile SrcFile;
 typedef struct Pos Pos;
 typedef struct Parser Parser;
 typedef struct List List;
+typedef struct Atom Atom;
+typedef struct Result Result;
 
-enum State {
-  BEGIN,
-  IN_SEXP,
-  IN_DQ_STR,
-  IN_SQ_STR,
-  IN_SYMBOL,
-  IN_NUMBER,
-  IN_WHITESPACE,
+struct Pos {
+  size_t row;
+  size_t col;
 };
 
 struct SrcFile {
   char* name;
   FILE* fp;
-  size_t row;
-  size_t col;
   bool eof;
+  Pos pos;
 };
 
 struct CCode {
   char* lines;
 };
 
-
 enum Tag {
   SEXP,
-  SYM,
-  STR,
-  NUM,
+  ATOM,
 };
 
 struct List {
@@ -54,22 +49,48 @@ struct List {
   size_t len;
 };
 
-struct Obj {
-  size_t row;
-  size_t col;
+List* list_init();
+void list_resize(List*, size_t);
+void list_add(List*, Obj*);
+void list_free(List*);
+void list_print(List*, size_t indent);
+
+struct Atom {
+  char *buffer;
+  size_t buffer_len;
   size_t len;
+};
+
+Atom *atom_init();
+void atom_resize(Atom*, size_t);
+void atom_add(Atom*, char);
+void atom_free(Atom*);
+void atom_print(Atom*);
+
+
+struct Result {
+  enum {
+    OK,
+    Err
+  } tag;
+
+};
+
+struct Obj {
+  Pos beg;
+  Pos end;
 
   Tag tag;
   union {
-    char *sym;
-    char *str;
-    char *num;
+    Atom *atom;
     List *sexp;
   };
 };
 
+Obj* obj_init(Tag tag);
+void obj_free(Obj* obj);
+
 struct Parser {
-  State state;
   List *list;
   SrcFile *srcfile;
 };
@@ -88,9 +109,18 @@ struct Parser {
     _tmp_ptr;							\
   })
 
+#define X(msg, ...) do { \
+    time_t t = time(NULL); \
+    struct tm *tm_info = localtime(&t); \
+    char time_buf[20]; \
+    strftime(time_buf, 20, "%Y-%m-%d %H:%M:%S", tm_info); \
+    fprintf(stderr, "[%s] %s:%d: " msg "\n", time_buf, __FILE__, __LINE__, ##__VA_ARGS__); \
+    fflush(stderr); \
+} while(0)
+
 // ==== Source files ====
 
-SrcFile* srcfile_open(char *name) {
+SrcFile* srcfile_init(char *name) {
   FILE *fp = fopen(name, "r");
   if (fp == NULL) {
     return NULL;
@@ -104,8 +134,8 @@ SrcFile* srcfile_open(char *name) {
   memcpy(srcfile->name, name, namelen);
   srcfile->name[namelen] = '\0';
 
-  srcfile->row = 0;
-  srcfile->col = 0;
+  srcfile->pos.row = 0;
+  srcfile->pos.col = 0;
 
   srcfile->fp = fp;
   srcfile->eof = false;
@@ -113,7 +143,7 @@ SrcFile* srcfile_open(char *name) {
   return srcfile;
 }
 
-void srcfile_close(SrcFile *srcfile) {
+void srcfile_free(SrcFile *srcfile) {
   free(srcfile->name);
   fclose(srcfile->fp);
   free(srcfile);
@@ -129,10 +159,10 @@ int srcfile_peek(SrcFile *srcfile) {
 
 int srcfile_getc(SrcFile *srcfile) {
   int ch = fgetc(srcfile->fp);
-  srcfile->col++;
+  srcfile->pos.col++;
   if (ch == '\n') {
-    srcfile->row++;
-    srcfile->col = 0;
+    srcfile->pos.row++;
+    srcfile->pos.col = 0;
   } else if (ch == EOF) {
     srcfile->eof = true;
   }
@@ -143,6 +173,36 @@ int srcfile_getc(SrcFile *srcfile) {
 bool srcfile_finished_p(SrcFile* srcfile) {
   return srcfile->eof;
 }
+
+// ==== Objects ====
+
+Obj* obj_init(Tag tag) {
+  Obj *obj = CHECK_ALLOC(calloc(sizeof(Obj), 1));
+  obj->tag = tag;
+  switch (tag) {
+  case SEXP:
+    obj->sexp = list_init();
+    break;
+  case ATOM:
+    obj->atom = atom_init();
+    break;
+  }
+  return obj;
+}
+
+void obj_free(Obj *obj) {
+  switch (obj->tag) {
+  case SEXP:
+    list_free(obj->sexp);
+    break;
+  case ATOM:
+    atom_free(obj->atom);
+    break;
+  };
+
+  free(obj);
+}
+
 
 // ==== List handling ====
 
@@ -174,83 +234,118 @@ void list_add(List *list, Obj *obj) {
 
 void list_free(List *l) {
   for (int i = 0; i < l->len; i++) {
-    free(l->buffer[i]);
+    obj_free(l->buffer[i]);
   }
   free(l->buffer);
   free(l);
 }
 
+void list_print(List *l, size_t indent) {
+  size_t num_width = 1 + (size_t) log10(l->len);
+  char formatstr[100];
+  snprintf(formatstr, 100, "%%%zus%%%zuzu: %%s\n", indent, num_width);
 
-// ==== Objects ====
-
-Obj* obj_init(Tag tag) {
-  Obj *obj = CHECK_ALLOC(malloc(sizeof(Obj)));
-  obj->row = 0;
-  obj->col = 0;
-  obj->len = 0;
-  obj->tag = tag;
-  return obj;
+  for (size_t i = 0; i < l->len; i++) {
+    switch (l->buffer[i]->tag) {
+    case SEXP:
+      printf(formatstr, "", i, "(");
+      list_print(l->buffer[i]->sexp, indent + 2);
+      printf(formatstr, "", i, ")");
+      break;
+    case ATOM:
+      printf(formatstr, "", i, l->buffer[i]->atom->buffer);
+      break;
+    }
+  }
 }
 
-void obj_free(Obj *obj) {
-  switch (obj->tag) {
-  case SEXP:
-    list_free(obj->sexp);
-  case SYM:
-    free(obj->sym);
-  case STR:
-    free(obj->str);
-  case NUM:
-    free(obj->num);
-  };
 
-  free(obj);
+// ==== Atom ====
+
+Atom *atom_init() {
+  Atom *atom = CHECK_ALLOC(malloc(sizeof(Atom)));
+  atom->buffer = NULL;
+  atom->buffer_len = 0;
+  atom->len = 0;
+  return atom;
+}
+
+void atom_resize(Atom *a, size_t buffer_len) {
+  if (a->buffer != NULL) {
+    a->buffer = CHECK_ALLOC(realloc(a->buffer, buffer_len * sizeof(char)));
+  } else {
+    a->buffer = CHECK_ALLOC(malloc(buffer_len * sizeof(char)));
+  }
+  a->buffer_len = buffer_len;
+}
+
+void atom_add(Atom *atom, char ch) {
+  if (atom->len >= atom->buffer_len) {
+    size_t new_size = atom->buffer_len == 0 ? 8 : atom->buffer_len * 2;
+    atom_resize(atom, new_size);
+  }
+  atom->buffer[atom->len++] = ch;
+}
+
+void atom_free(Atom *a) {
+  free(a->buffer);
+  free(a);
+}
+
+void atom_print(Atom *a) {
+  for (size_t i = 0; i < a->len; i++)
+    printf("%c", a->buffer[i]);
 }
 
 
 // ==== Parser ====
 
-void consume_next(SrcFile *f, State state);
-
-void consume_sexp(SrcFile *f) {
-  // SExp s_exp;
-  // s_exp.start_row = f->row;
-  // s_exp.start_col = f->col;
-
-  int start = srcfile_getc(f);
-  assert(start == '(');
-
-  consume_next(f, IN_SEXP);
-}
-
-void consume_symbol(SrcFile *f) {
-}
-
-void consume_dq_str() {}
-void consume_sq_str() {}
-void consume_number() {}
-
-void consume_next(SrcFile *f, State state) {
+void parser_next(Parser *parser, List *container, Atom *atom) {
   int ch;
-  while ((ch = srcfile_peek(f)) != EOF) {
-    switch (ch) {
-    case ' ':
-    case '\n':
-      srcfile_getc(f);
-      break;
-    case '(':
-      consume_sexp(f);
-      break;
-    case ')':
-      if (state == IN_SEXP) return;
-      // Maybe make this an error
-    default:
-      consume_symbol(f);
-      printf("%c", srcfile_getc(f));
+
+  while ((ch = srcfile_peek(parser->srcfile)) != EOF) {
+    Obj *o = NULL;
+
+    printf("%c", ch);
+
+    if (atom != NULL) {
+      if (isspace(ch) || ch == ')') {
+	atom_add(atom, '\0');
+	return;
+      }
+
+      atom_add(atom, srcfile_getc(parser->srcfile));
+    } else {
+      if (isspace(ch)) {
+	srcfile_getc(parser->srcfile);
+	continue;
+      }
+
+      if (ch == ')') {
+	assert(container != NULL);
+	srcfile_getc(parser->srcfile);
+	return;
+      }
+
+      if (ch == '(') {
+	o = obj_init(SEXP);
+	o->beg = parser->srcfile->pos;
+	list_add(container, o);
+	srcfile_getc(parser->srcfile);
+	parser_next(parser, o->sexp, NULL);
+	o->end = parser->srcfile->pos;
+	continue;
+      }
+
+      o = obj_init(ATOM);
+      o->beg = parser->srcfile->pos;
+      list_add(container, o);
+      parser_next(parser, container, o->atom);
+      o->end = parser->srcfile->pos;
     }
   }
 
-  srcfile_getc(f);
+  assert(srcfile_getc(parser->srcfile) == EOF);
 }
 
 
@@ -260,21 +355,31 @@ void parser_parse(Parser *parser) {
     exit(EXIT_FAILURE);
   }
 
-  while (!parser->srcfile->eof) {
-    consume_next(parser->srcfile, BEGIN);
+  parser_next(parser, parser->list, NULL);
+
+  printf("\n\n");
+}
+
+void parser_print(Parser *parser) {
+  if (parser->list == NULL) {
+    printf("(NULL)\n");
+    return;
   }
+
+  printf("=== %s ===\n", parser->srcfile->name);
+  list_print(parser->list, 0);
 }
 
 
 Parser* parser_init(char *filename) {
   Parser *parser = CHECK_ALLOC(malloc(sizeof(Parser)));
-  parser->srcfile = srcfile_open(filename);
+  parser->srcfile = srcfile_init(filename);
   parser->list = list_init();
-  parser->state = BEGIN;
   return parser;
 }
 
 void parser_free(Parser *parser) {
+  srcfile_free(parser->srcfile);
   list_free(parser->list);
   free(parser);
 }
@@ -304,7 +409,7 @@ int main(int argc, char** argv) {
 // Very coarse tests for now, will refactor later
 
 void test_src_file_reads() {
-  SrcFile *src = srcfile_open("hello.sic");
+  SrcFile *src = srcfile_init("hello.sic");
   while (true) {
     int ch = srcfile_getc(src);
     if (ch == EOF) {
@@ -313,7 +418,7 @@ void test_src_file_reads() {
 
     printf("%c", ch);
   }
-  srcfile_close(src);
+  srcfile_free(src);
 }
 
 void test_list_management() {
@@ -340,6 +445,7 @@ void test_list_management() {
 void test_parse() {
   Parser *parser = parser_init("hello.sic");
   parser_parse(parser);
+  parser_print(parser);
   parser_free(parser);
 }
 
