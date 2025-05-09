@@ -1,5 +1,4 @@
 (#include "stdio.h")
 
 (fn main :int (argc :int argv :char**)
-  (printf "hello, world!")
-  (return 0))
+  (printf "hello, world!"))
