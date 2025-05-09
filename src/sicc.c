@@ -460,7 +460,7 @@ void transpile_call(Obj *o, CCode *code) {
     }
     w++;
   }
-  w -= 2;
+  w -= 1;
   line[w++] = ')';
   line[w++] = ';';
   line[w++] = '\0';
@@ -562,14 +562,20 @@ CCode *transpile(List *list) {
 // === Main ===
 
 int main(int argc, char **argv) {
-  if (argc < 1) {
-    fprintf(stderr, "Usage: %s <file to transpile>", argv[0]);
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <file to transpile> <output file>", argv[0]);
     exit(EXIT_FAILURE);
   }
 
   Parser *parser = parser_init(argv[1]);
   parser_parse(parser);
+  CCode *code = transpile(parser->list);
   parser_free(parser);
+
+  FILE *fp = fopen(argv[2], "w");
+  ccode_write(code, fp);
+  fclose(fp);
+  ccode_free(code);
 }
 
 #else
