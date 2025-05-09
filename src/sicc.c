@@ -306,7 +306,9 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
   while ((ch = srcfile_peek(parser->srcfile)) != EOF) {
     Obj *o = NULL;
 
+#ifdef DEBUG
     printf("%c", ch);
+#endif
 
     if (atom != NULL) {
       if (isspace(ch) || ch == ')') {
@@ -356,8 +358,6 @@ void parser_parse(Parser *parser) {
   }
 
   parser_next(parser, parser->list, NULL);
-
-  printf("\n\n");
 }
 
 void parser_print(Parser *parser) {
@@ -369,7 +369,6 @@ void parser_print(Parser *parser) {
   printf("=== %s ===\n", parser->srcfile->name);
   list_print(parser->list, 0);
 }
-
 
 Parser* parser_init(char *filename) {
   Parser *parser = CHECK_ALLOC(malloc(sizeof(Parser)));
@@ -385,7 +384,7 @@ void parser_free(Parser *parser) {
 }
 
 
-// === Transplite ===
+// === Transpiler ===
 void transpile(List *list) {
 }
 
