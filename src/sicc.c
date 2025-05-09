@@ -3,13 +3,12 @@
 #include <assert.h>
 #include <ctype.h>
 #include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-
 
 // === Headers & Data Structures ===
 
@@ -29,14 +28,14 @@ struct Pos {
 };
 
 struct SrcFile {
-  char* name;
-  FILE* fp;
+  char *name;
+  FILE *fp;
   bool eof;
   Pos pos;
 };
 
 struct CCode {
-  char** lines;
+  char **lines;
   size_t count;
   size_t buffer;
 };
@@ -52,11 +51,11 @@ struct List {
   size_t len;
 };
 
-List* list_init();
-void list_resize(List*, size_t);
-void list_add(List*, Obj*);
-void list_free(List*);
-void list_print(List*, size_t indent);
+List *list_init();
+void list_resize(List *, size_t);
+void list_add(List *, Obj *);
+void list_free(List *);
+void list_print(List *, size_t indent);
 
 struct Atom {
   char *buffer;
@@ -65,18 +64,13 @@ struct Atom {
 };
 
 Atom *atom_init();
-void atom_resize(Atom*, size_t);
-void atom_add(Atom*, char);
-void atom_free(Atom*);
-void atom_print(Atom*);
-
+void atom_resize(Atom *, size_t);
+void atom_add(Atom *, char);
+void atom_free(Atom *);
+void atom_print(Atom *);
 
 struct Result {
-  enum {
-    OK,
-    Err
-  } tag;
-
+  enum { OK, Err } tag;
 };
 
 struct Obj {
@@ -90,8 +84,8 @@ struct Obj {
   };
 };
 
-Obj* obj_init(Tag tag);
-void obj_free(Obj* obj);
+Obj *obj_init(Tag tag);
+void obj_free(Obj *obj);
 
 struct Parser {
   List *list;
@@ -101,29 +95,33 @@ struct Parser {
 // === Implementations ===
 
 // ==== Utilities ====
-#define CHECK_ALLOC(ptr)					\
-  ({								\
-    void *_tmp_ptr = (ptr);					\
-    if (_tmp_ptr == NULL) {					\
-      fprintf(stderr, "error: " __FILE__ ":%d "			\
-	      "Couldn't allocate memory! Exiting.", __LINE__);	\
-      exit(1);							\
-    }								\
-    _tmp_ptr;							\
+#define CHECK_ALLOC(ptr)                                                       \
+  ({                                                                           \
+    void *_tmp_ptr = (ptr);                                                    \
+    if (_tmp_ptr == NULL) {                                                    \
+      fprintf(stderr,                                                          \
+              "error: " __FILE__ ":%d "                                        \
+              "Couldn't allocate memory! Exiting.",                            \
+              __LINE__);                                                       \
+      exit(1);                                                                 \
+    }                                                                          \
+    _tmp_ptr;                                                                  \
   })
 
-#define X(msg, ...) do { \
-    time_t t = time(NULL); \
-    struct tm *tm_info = localtime(&t); \
-    char time_buf[20]; \
-    strftime(time_buf, 20, "%Y-%m-%d %H:%M:%S", tm_info); \
-    fprintf(stderr, "[%s] %s:%d: " msg "\n", time_buf, __FILE__, __LINE__, ##__VA_ARGS__); \
-    fflush(stderr); \
-} while(0)
+#define X(msg, ...)                                                            \
+  do {                                                                         \
+    time_t t = time(NULL);                                                     \
+    struct tm *tm_info = localtime(&t);                                        \
+    char time_buf[20];                                                         \
+    strftime(time_buf, 20, "%Y-%m-%d %H:%M:%S", tm_info);                      \
+    fprintf(stderr, "[%s] %s:%d: " msg "\n", time_buf, __FILE__, __LINE__,     \
+            ##__VA_ARGS__);                                                    \
+    fflush(stderr);                                                            \
+  } while (0)
 
 // ==== Source files ====
 
-SrcFile* srcfile_init(char *name) {
+SrcFile *srcfile_init(char *name) {
   FILE *fp = fopen(name, "r");
   if (fp == NULL) {
     return NULL;
@@ -173,13 +171,11 @@ int srcfile_getc(SrcFile *srcfile) {
   return ch;
 }
 
-bool srcfile_finished_p(SrcFile* srcfile) {
-  return srcfile->eof;
-}
+bool srcfile_finished_p(SrcFile *srcfile) { return srcfile->eof; }
 
 // ==== Objects ====
 
-Obj* obj_init(Tag tag) {
+Obj *obj_init(Tag tag) {
   Obj *obj = CHECK_ALLOC(calloc(sizeof(Obj), 1));
   obj->tag = tag;
   switch (tag) {
@@ -206,10 +202,9 @@ void obj_free(Obj *obj) {
   free(obj);
 }
 
-
 // ==== List handling ====
 
-List* list_init() {
+List *list_init() {
   List *list = CHECK_ALLOC(malloc(sizeof(List)));
   list->len = 0;
   list->buffer = NULL;
@@ -219,9 +214,9 @@ List* list_init() {
 
 void list_resize(List *l, size_t buffer_len) {
   if (l->buffer != NULL) {
-    l->buffer = CHECK_ALLOC(realloc(l->buffer, buffer_len * sizeof(Obj*)));
+    l->buffer = CHECK_ALLOC(realloc(l->buffer, buffer_len * sizeof(Obj *)));
   } else {
-    l->buffer = CHECK_ALLOC(malloc(buffer_len * sizeof(Obj*)));
+    l->buffer = CHECK_ALLOC(malloc(buffer_len * sizeof(Obj *)));
   }
   l->buffer_len = buffer_len;
 }
@@ -244,26 +239,28 @@ void list_free(List *l) {
 }
 
 void list_print(List *l, size_t indent) {
-  size_t num_width = 1 + (size_t) log10(l->len);
+  size_t num_width = 1 + (size_t)log10(l->len);
   char formatstr[100];
-  snprintf(formatstr, 100, "%%%zus%%%zuzu: %%s [%%zu, %%zu] -> [%%zu, %%zu]\n", indent, num_width);
+  snprintf(formatstr, 100, "%%%zus%%%zuzu: %%s [%%zu, %%zu] -> [%%zu, %%zu]\n",
+           indent, num_width);
 
   for (size_t i = 0; i < l->len; i++) {
     Obj *o = l->buffer[i];
     switch (o->tag) {
     case SEXP:
-      printf(formatstr, "", i, "(", o->beg.row, o->beg.col, o->end.row, o->end.col);
+      printf(formatstr, "", i, "(", o->beg.row, o->beg.col, o->end.row,
+             o->end.col);
       list_print(o->sexp, indent + 2);
-      printf(formatstr, "", i, ")", o->beg.row, o->beg.col, o->end.row, o->end.col);
+      printf(formatstr, "", i, ")", o->beg.row, o->beg.col, o->end.row,
+             o->end.col);
       break;
     case ATOM:
-      printf(formatstr, "", i, o->atom->buffer,
-	     o->beg.row, o->beg.col, o->end.row, o->end.col);
+      printf(formatstr, "", i, o->atom->buffer, o->beg.row, o->beg.col,
+             o->end.row, o->end.col);
       break;
     }
   }
 }
-
 
 // ==== Atom ====
 
@@ -302,7 +299,6 @@ void atom_print(Atom *a) {
     printf("%c", a->buffer[i]);
 }
 
-
 // ==== Parser ====
 
 void parser_next(Parser *parser, List *container, Atom *atom) {
@@ -317,31 +313,31 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
 
     if (atom != NULL) {
       if (isspace(ch) || ch == ')') {
-	atom_add(atom, '\0');
-	return;
+        atom_add(atom, '\0');
+        return;
       }
 
       atom_add(atom, srcfile_getc(parser->srcfile));
     } else {
       if (isspace(ch)) {
-	srcfile_getc(parser->srcfile);
-	continue;
+        srcfile_getc(parser->srcfile);
+        continue;
       }
 
       if (ch == ')') {
-	assert(container != NULL);
-	srcfile_getc(parser->srcfile);
-	return;
+        assert(container != NULL);
+        srcfile_getc(parser->srcfile);
+        return;
       }
 
       if (ch == '(') {
-	o = obj_init(SEXP);
-	o->beg = parser->srcfile->pos;
-	list_add(container, o);
-	srcfile_getc(parser->srcfile);
-	parser_next(parser, o->sexp, NULL);
-	o->end = parser->srcfile->pos;
-	continue;
+        o = obj_init(SEXP);
+        o->beg = parser->srcfile->pos;
+        list_add(container, o);
+        srcfile_getc(parser->srcfile);
+        parser_next(parser, o->sexp, NULL);
+        o->end = parser->srcfile->pos;
+        continue;
       }
 
       o = obj_init(ATOM);
@@ -354,7 +350,6 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
 
   assert(srcfile_getc(parser->srcfile) == EOF);
 }
-
 
 void parser_parse(Parser *parser) {
   if (parser->srcfile == NULL) {
@@ -375,7 +370,7 @@ void parser_print(Parser *parser) {
   list_print(parser->list, 0);
 }
 
-Parser* parser_init(char *filename) {
+Parser *parser_init(char *filename) {
   Parser *parser = CHECK_ALLOC(malloc(sizeof(Parser)));
   parser->srcfile = srcfile_init(filename);
   parser->list = list_init();
@@ -390,7 +385,7 @@ void parser_free(Parser *parser) {
 
 // === Output behavior ===
 
-CCode* ccode_init() {
+CCode *ccode_init() {
   CCode *code = CHECK_ALLOC(malloc(sizeof(CCode)));
   code->lines = NULL;
   code->buffer = 0;
@@ -408,15 +403,15 @@ void ccode_free(CCode *code) {
 
 void ccode_resize(CCode *code, size_t size) {
   if (code->lines == NULL) {
-    code->lines = CHECK_ALLOC(calloc(size, sizeof(char*)));
+    code->lines = CHECK_ALLOC(calloc(size, sizeof(char *)));
   } else {
-    code->lines = CHECK_ALLOC(realloc(code->lines, sizeof(char*) * size));
+    code->lines = CHECK_ALLOC(realloc(code->lines, sizeof(char *) * size));
   }
 
   code->buffer = size;
 }
 
-char* ccode_alloc_line(CCode *code, size_t size) {
+char *ccode_alloc_line(CCode *code, size_t size) {
   if (code->count >= code->buffer) {
     ccode_resize(code, code->buffer == 0 ? 8 : code->buffer * 2);
   }
@@ -431,7 +426,6 @@ void ccode_write(CCode *code, FILE *stream) {
     fprintf(stream, "%s\n", code->lines[i]);
   }
 }
-
 
 // === Transpiler ===
 // Feeling this out, will need to be dramatically rewritten
@@ -476,7 +470,7 @@ void transpile_fn(Obj *o, CCode *code) {
   }
 
   line[w++] = '(';
-  for (size_t j = 0; j < b[3]->sexp->len; j+=2) {
+  for (size_t j = 0; j < b[3]->sexp->len; j += 2) {
     for (size_t k = 1; k < b[3]->sexp->buffer[j + 1]->atom->len - 1; k++) {
       line[w++] = b[3]->sexp->buffer[j + 1]->atom->buffer[k];
     }
@@ -493,35 +487,33 @@ void transpile_fn(Obj *o, CCode *code) {
   line[w++] = '{';
   line[w++] = '\0';
 
-
   char *endline = ccode_alloc_line(code, 2);
   endline[0] = '}';
   endline[1] = '\0';
 }
 
-void transpile_call(Obj *o, CCode *code) {
-}
+void transpile_call(Obj *o, CCode *code) {}
 
-CCode* transpile(List *list) {
+CCode *transpile(List *list) {
   CCode *code = ccode_init();
   for (size_t i = 0; i < list->len; i++) {
     Obj *o = list->buffer[i];
 
     if (o->tag == SEXP) {
       if (o->sexp->len == 0)
-	continue;
+        continue;
 
       Obj *elem = o->sexp->buffer[0];
       if (elem->tag == ATOM) {
-	if (strncmp("#include", elem->atom->buffer, 8) == 0) {
-	  transpile_include(o, code);
-	} else if (strncmp("fn", elem->atom->buffer, 2) == 0) {
-	  transpile_fn(o, code);
-	} else {
-	  transpile_call(o, code);
-	}
+        if (strncmp("#include", elem->atom->buffer, 8) == 0) {
+          transpile_include(o, code);
+        } else if (strncmp("fn", elem->atom->buffer, 2) == 0) {
+          transpile_fn(o, code);
+        } else {
+          transpile_call(o, code);
+        }
       } else {
-	X("Unhandled nested sexp");
+        X("Unhandled nested sexp");
       }
     } else {
       assert(false);
@@ -531,11 +523,10 @@ CCode* transpile(List *list) {
   return code;
 }
 
-
 #ifndef TEST
 // === Main ===
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   if (argc < 1) {
     fprintf(stderr, "Usage: %s <file to transpile>", argv[0]);
     exit(EXIT_FAILURE);
@@ -566,7 +557,7 @@ void test_src_file_reads() {
 void test_list_management() {
   List *list = list_init();
 
-  Obj *o = CHECK_ALLOC(calloc(2, sizeof(Obj*)));
+  Obj *o = CHECK_ALLOC(calloc(2, sizeof(Obj *)));
   for (int i = 0; i < list->len; i++) {
     list_add(list, &o[i]);
   }
@@ -591,18 +582,16 @@ void test_transpile() {
   CCode *code = transpile(parser->list);
   parser_free(parser);
 
-
   printf("\n\n");
   ccode_write(code, stdout);
   ccode_free(code);
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   printf("=== Testing sicc! ===\n");
   // test_src_file_reads();
   // test_list_management();
   test_transpile();
 }
-
 
 #endif
