@@ -1,0 +1,31 @@
+(#include <stdio.h>)
+(#include <stdlib.h>)
+(#include <string.h>)
+
+(fn compare :int (a :void* b :void*)
+ (return (deref (:int* a)) - (deref (:int* b))))
+
+
+(fn main :int (argc :int argv char**)
+ (decl line char[1024])
+ (decl list1 int[8096])
+ (decl list2 int[8096])
+ (decl count int 0)
+
+ (while (!= (fgets line 1024 stdin) NULL)
+  (decl token1 :char* (strtok line " "))
+  (set list1[count] (atoi token1))
+  (decl token2 :char* (strtok NULL " "))
+  (set list2[count] (atoi token2))
+  (++ count))
+
+ (qsort list1 count (sizeof int) compare)
+ (qsort list2 count (sizeof int) compare)
+
+ (decl sum :int 0)
+ (for ((i :int 0) (< i count) (++ i))
+  (+= sum (abs (- list1[i] list2[i]))))
+
+ (printf "%d\n" sum)
+
+ (return 0))
