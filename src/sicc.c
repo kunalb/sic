@@ -353,7 +353,7 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
 
 void parser_parse(Parser *parser) {
   if (parser->srcfile == NULL) {
-    fprintf(stderr, "error: Unable to access file %s.", parser->srcfile->name);
+    fprintf(stderr, "error: Unable to access file.\n");
     exit(EXIT_FAILURE);
   }
 
@@ -464,6 +464,13 @@ void transpile_call(Obj *o, CCode *code) {
   line[w++] = ')';
   line[w++] = ';';
   line[w++] = '\0';
+}
+
+
+// (return X) -> return X;
+void transpile_return(Obj *o, CCode *code) {
+  Obj **b = o->sexp->buffer;
+
 }
 
 // (fn name :type (arg1 :type1 arg2 :type2 ...) ...)
@@ -583,7 +590,7 @@ int main(int argc, char **argv) {
 // Very coarse tests for now, will refactor later
 
 void test_src_file_reads() {
-  SrcFile *src = srcfile_init("hello.sic");
+  SrcFile *src = srcfile_init("examples/hello.sic");
   while (true) {
     int ch = srcfile_getc(src);
     if (ch == EOF) {
@@ -617,7 +624,7 @@ void test_list_management() {
 }
 
 void test_transpile() {
-  Parser *parser = parser_init("hello.sic");
+  Parser *parser = parser_init("examples/hello.sic");
   parser_parse(parser);
   parser_print(parser);
   CCode *code = transpile(parser->list);
