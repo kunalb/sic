@@ -100,9 +100,9 @@ struct Parser {
     void *_tmp_ptr = (ptr);                                                    \
     if (_tmp_ptr == NULL) {                                                    \
       fprintf(stderr,                                                          \
-	      "error: " __FILE__ ":%d "                                        \
-	      "Couldn't allocate memory! Exiting.",                            \
-	      __LINE__);                                                       \
+              "error: " __FILE__ ":%d "                                        \
+              "Couldn't allocate memory! Exiting.",                            \
+              __LINE__);                                                       \
       exit(1);                                                                 \
     }                                                                          \
     _tmp_ptr;                                                                  \
@@ -115,7 +115,7 @@ struct Parser {
     char time_buf[20];                                                         \
     strftime(time_buf, 20, "%Y-%m-%d %H:%M:%S", tm_info);                      \
     fprintf(stderr, "[%s] %s:%d: " msg "\n", time_buf, __FILE__, __LINE__,     \
-	    ##__VA_ARGS__);                                                    \
+            ##__VA_ARGS__);                                                    \
     fflush(stderr);                                                            \
   } while (0)
 
@@ -242,21 +242,21 @@ void list_print(List *l, size_t indent) {
   size_t num_width = 1 + (size_t)log10(l->len);
   char formatstr[100];
   snprintf(formatstr, 100, "%%%zus%%%zuzu: %%s [%%zu, %%zu] -> [%%zu, %%zu]\n",
-	   indent, num_width);
+           indent, num_width);
 
   for (size_t i = 0; i < l->len; i++) {
     Obj *o = l->buffer[i];
     switch (o->tag) {
     case SEXP:
       printf(formatstr, "", i, "(", o->beg.row, o->beg.col, o->end.row,
-	     o->end.col);
+             o->end.col);
       list_print(o->sexp, indent + 2);
       printf(formatstr, "", i, ")", o->beg.row, o->beg.col, o->end.row,
-	     o->end.col);
+             o->end.col);
       break;
     case ATOM:
       printf(formatstr, "", i, o->atom->buffer, o->beg.row, o->beg.col,
-	     o->end.row, o->end.col);
+             o->end.row, o->end.col);
       break;
     }
   }
@@ -313,31 +313,31 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
 
     if (atom != NULL) {
       if (isspace(ch) || ch == ')') {
-	atom_add(atom, '\0');
-	return;
+        atom_add(atom, '\0');
+        return;
       }
 
       atom_add(atom, srcfile_getc(parser->srcfile));
     } else {
       if (isspace(ch)) {
-	srcfile_getc(parser->srcfile);
-	continue;
+        srcfile_getc(parser->srcfile);
+        continue;
       }
 
       if (ch == ')') {
-	assert(container != NULL);
-	srcfile_getc(parser->srcfile);
-	return;
+        assert(container != NULL);
+        srcfile_getc(parser->srcfile);
+        return;
       }
 
       if (ch == '(') {
-	o = obj_init(SEXP);
-	o->beg = parser->srcfile->pos;
-	list_add(container, o);
-	srcfile_getc(parser->srcfile);
-	parser_next(parser, o->sexp, NULL);
-	o->end = parser->srcfile->pos;
-	continue;
+        o = obj_init(SEXP);
+        o->beg = parser->srcfile->pos;
+        list_add(container, o);
+        srcfile_getc(parser->srcfile);
+        parser_next(parser, o->sexp, NULL);
+        o->end = parser->srcfile->pos;
+        continue;
       }
 
       o = obj_init(ATOM);
@@ -466,12 +466,8 @@ void transpile_call(Obj *o, CCode *code) {
   line[w++] = '\0';
 }
 
-
 // (return X) -> return X;
-void transpile_return(Obj *o, CCode *code) {
-  Obj **b = o->sexp->buffer;
-
-}
+void transpile_return(Obj *o, CCode *code) { Obj **b = o->sexp->buffer; }
 
 // (fn name :type (arg1 :type1 arg2 :type2 ...) ...)
 void transpile_fn(Obj *o, CCode *code) {
@@ -543,19 +539,19 @@ CCode *transpile(List *list) {
 
     if (o->tag == SEXP) {
       if (o->sexp->len == 0)
-	continue;
+        continue;
 
       Obj *elem = o->sexp->buffer[0];
       if (elem->tag == ATOM) {
-	if (strncmp("#include", elem->atom->buffer, 8) == 0) {
-	  transpile_include(o, code);
-	} else if (strncmp("fn", elem->atom->buffer, 2) == 0) {
-	  transpile_fn(o, code);
-	} else {
-	  transpile_call(o, code);
-	}
+        if (strncmp("#include", elem->atom->buffer, 8) == 0) {
+          transpile_include(o, code);
+        } else if (strncmp("fn", elem->atom->buffer, 2) == 0) {
+          transpile_fn(o, code);
+        } else {
+          transpile_call(o, code);
+        }
       } else {
-	X("Unhandled nested sexp");
+        X("Unhandled nested sexp");
       }
     } else {
       assert(false);

@@ -53,6 +53,7 @@ Iterate on language design and build tools for convenience
 - LSP support, autocomplete; wrap clang-based tools
 - Tree-Sitter/syntax highlighting support (shoud be trivial)
 - Second order tools that can be built within the language (automatic annotation, etc.)
+- Compilation / packaging support
 
 Extensibility/macro support
 - Explore additional compile time execution to expand macros/do reflection

@@ -6,7 +6,7 @@
  (return (deref (:int* a)) - (deref (:int* b))))
 
 
-(fn main :int (argc :int argv char**)
+(fn main :int (argc :int argv :char**)
  (decl line char[1024])
  (decl list1 int[8096])
  (decl list2 int[8096])
