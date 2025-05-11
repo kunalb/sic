@@ -99,11 +99,11 @@ typedef struct TRule {
   void (*fn)(Obj *o, CCode *code);
 } TRule;
 
-void t2_return(Obj *o, CCode *code);
-void t2_include(Obj *o, CCode *code);
-void t2_fn(Obj *o, CCode *code);
-void t2_call(Obj *o, CCode *code);
-void t2_obj(Obj *o, CCode *code);
+void transpile_return(Obj *o, CCode *code);
+void transpile_include(Obj *o, CCode *code);
+void transpile_fn(Obj *o, CCode *code);
+void transpile_call(Obj *o, CCode *code);
+void transpile_obj(Obj *o, CCode *code);
 
 // === Implementations ===
 
@@ -472,14 +472,14 @@ void ccode_write(CCode *code, FILE *stream) {
 // Feeling this out, will need to be dramatically rewritten
 
 static const TRule TRANSPILE_RULES[] = {
-    {"#include", t2_include},
-    {"fn", t2_fn},
-    {"return", t2_return},
-    {".*", t2_call},
+    {"#include", transpile_include},
+    {"fn", transpile_fn},
+    {"return", transpile_return},
+    {".*", transpile_call},
 };
 #define TRANSPILE_RULE_LEN (sizeof(TRANSPILE_RULES) / sizeof(TRule))
 
-void t2_return(Obj *o, CCode *code) {
+void transpile_return(Obj *o, CCode *code) {
   assert(o->tag == SEXP);
   assert(o->sexp->len == 2);
 
@@ -489,7 +489,7 @@ void t2_return(Obj *o, CCode *code) {
   ccode_printf_line(code, "return %s;", t->atom->buffer);
 }
 
-void t2_include(Obj *o, CCode *code) {
+void transpile_include(Obj *o, CCode *code) {
   assert(o->tag == SEXP);
   assert(o->sexp->len > 1);
 
@@ -503,7 +503,7 @@ void t2_include(Obj *o, CCode *code) {
   }
 }
 
-void t2_call(Obj *o, CCode *code) {
+void transpile_call(Obj *o, CCode *code) {
   assert(o->tag == SEXP);
   assert(o->sexp->len > 0);
 
@@ -518,7 +518,7 @@ void t2_call(Obj *o, CCode *code) {
   ccode_printf_line(code, ");");
 }
 
-void t2_fn(Obj *o, CCode *code) {
+void transpile_fn(Obj *o, CCode *code) {
   assert(o->tag == SEXP);
   assert(o->sexp->len >= 5);
 
@@ -544,12 +544,12 @@ void t2_fn(Obj *o, CCode *code) {
 
   ccode_printf_line(code, ") {");
 
-  t2_obj(o->sexp->buffer[4], code);
+  transpile_obj(o->sexp->buffer[4], code);
 
   ccode_printf_line(code, "}");
 }
 
-void t2_obj(Obj *o, CCode *code) {
+void transpile_obj(Obj *o, CCode *code) {
   static regex_t TRANSPILE_REGEXES[TRANSPILE_RULE_LEN];
   static bool initialized = false;
   if (!initialized) {
@@ -575,142 +575,11 @@ void t2_obj(Obj *o, CCode *code) {
   }
 }
 
-CCode *t2(List *list) {
-  CCode *code = ccode_init();
-
-  for (size_t i = 0; i < list->len; i++) {
-    t2_obj(list->buffer[i], code);
-  }
-
-  return code;
-}
-
-void transpile_include(Obj *o, CCode *code) {
-  assert(o->sexp->len == 2);
-  assert(o->sexp->buffer[1]->tag == ATOM);
-  Atom *atom = o->sexp->buffer[1]->atom;
-  size_t maxlen = 8 + atom->len + 1;
-  char *line = ccode_alloc_line(code, maxlen);
-  snprintf(line, maxlen, "#include %s", atom->buffer);
-}
-
-// (something args) => something(args);
-void transpile_call(Obj *o, CCode *code) {
-  size_t len = 1;
-  for (size_t i = 0; i < o->sexp->len; i++) {
-    len += o->sexp->buffer[i]->atom->len + 2;
-  }
-
-  char *line = ccode_alloc_line(code, len);
-  size_t w = 0;
-  for (size_t i = 0; i < o->sexp->len; i++) {
-    size_t l = o->sexp->buffer[i]->atom->len;
-    strncpy(&line[w], o->sexp->buffer[i]->atom->buffer, l);
-    w += l - 1;
-    if (i == 0) {
-      line[w] = '(';
-    } else {
-      line[w] = ',';
-      line[w] = ' ';
-    }
-    w++;
-  }
-  w -= 1;
-  line[w++] = ')';
-  line[w++] = ';';
-  line[w++] = '\0';
-}
-
-// (return X) -> return X;
-void transpile_return(Obj *o, CCode *code) { Obj **b = o->sexp->buffer; }
-
-// (fn name :type (arg1 :type1 arg2 :type2 ...) ...)
-void transpile_fn(Obj *o, CCode *code) {
-  Obj **b = o->sexp->buffer;
-
-  assert(o->sexp->len >= 5);
-  assert(b[1]->tag == ATOM);
-  assert(b[2]->tag == ATOM);
-  assert(b[3]->tag == SEXP);
-
-  size_t len = 2;
-  for (size_t i = 1; i <= 2; i++)
-    len += b[i]->atom->len + 1;
-
-  for (size_t i = 0; i < b[3]->sexp->len; i++) {
-    len += b[3]->sexp->buffer[i]->atom->len + 1;
-  }
-
-  char *line = ccode_alloc_line(code, len);
-
-  size_t w = 0;
-  for (size_t i = 1; i < b[2]->atom->len - 1; i++) {
-    line[w++] = b[2]->atom->buffer[i]; // Skip the :
-  }
-
-  line[w++] = ' ';
-
-  for (size_t i = 0; i < b[1]->atom->len - 1; i++) {
-    line[w++] = b[1]->atom->buffer[i];
-  }
-
-  line[w++] = '(';
-  for (size_t j = 0; j < b[3]->sexp->len; j += 2) {
-    for (size_t k = 1; k < b[3]->sexp->buffer[j + 1]->atom->len - 1; k++) {
-      line[w++] = b[3]->sexp->buffer[j + 1]->atom->buffer[k];
-    }
-    line[w++] = ' ';
-    for (size_t k = 0; k < b[3]->sexp->buffer[j]->atom->len - 1; k++) {
-      line[w++] = b[3]->sexp->buffer[j]->atom->buffer[k];
-    }
-    line[w++] = ',';
-    line[w++] = ' ';
-  }
-  w -= 2;
-  line[w++] = ')';
-  line[w++] = ' ';
-  line[w++] = '{';
-  line[w++] = '\0';
-
-  for (size_t s = 4; s < o->sexp->len; s++) {
-    if (o->sexp->buffer[s]->tag == ATOM) {
-      size_t l = o->sexp->buffer[s]->atom->len;
-      char *atom_line = ccode_alloc_line(code, l);
-      strncpy(atom_line, o->sexp->buffer[s]->atom->buffer, l);
-    } else {
-      transpile_call(o->sexp->buffer[s], code);
-    }
-  }
-
-  char *endline = ccode_alloc_line(code, 2);
-  endline[0] = '}';
-  endline[1] = '\0';
-}
-
 CCode *transpile(List *list) {
   CCode *code = ccode_init();
+
   for (size_t i = 0; i < list->len; i++) {
-    Obj *o = list->buffer[i];
-
-    if (o->tag == SEXP) {
-      if (o->sexp->len == 0)
-        continue;
-
-      Obj *elem = o->sexp->buffer[0];
-      if (elem->tag == ATOM) {
-        if (strncmp("#include", elem->atom->buffer, 8) == 0) {
-          transpile_include(o, code);
-        } else if (strncmp("fn", elem->atom->buffer, 2) == 0) {
-          transpile_fn(o, code);
-        } else {
-          transpile_call(o, code);
-        }
-      } else {
-        X("Unhandled nested sexp");
-      }
-    } else {
-      assert(false);
-    }
+    transpile_obj(list->buffer[i], code);
   }
 
   return code;
@@ -727,8 +596,7 @@ int main(int argc, char **argv) {
 
   Parser *parser = parser_init(argv[1]);
   parser_parse(parser);
-  // CCode *code = transpile(parser->list);
-  CCode *code = t2(parser->list);
+  CCode *code = transpile(parser->list);
   parser_free(parser);
 
   FILE *fp = fopen(argv[2], "w");
@@ -780,16 +648,11 @@ void test_transpile() {
   parser_parse(parser);
   parser_print(parser);
   CCode *code = transpile(parser->list);
-  CCode *code2 = t2(parser->list);
   parser_free(parser);
 
   printf("\n\n");
   ccode_write(code, stdout);
   ccode_free(code);
-
-  printf("\n\n");
-  ccode_write(code2, stdout);
-  ccode_free(code2);
 }
 
 int main(int argc, char **argv) {
