@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <ctype.h>
 #include <math.h>
+#include <regex.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,6 +93,17 @@ struct Parser {
   List *list;
   SrcFile *srcfile;
 };
+
+typedef struct TRule {
+  char *match;
+  void (*fn)(Obj *o, CCode *code);
+} TRule;
+
+void t2_return(Obj *o, CCode *code);
+void t2_include(Obj *o, CCode *code);
+void t2_fn(Obj *o, CCode *code);
+void t2_call(Obj *o, CCode *code);
+void t2_obj(Obj *o, CCode *code);
 
 // === Implementations ===
 
@@ -421,6 +434,17 @@ char *ccode_alloc_line(CCode *code, size_t size) {
   return line;
 }
 
+char *ccode_printf_line(CCode *code, const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  size_t size = vsnprintf(NULL, 0, format, args);
+  char *line = ccode_alloc_line(code, size + 1);
+  vsnprintf(line, size + 1, format, args);
+  va_end(args);
+
+  return line;
+}
+
 void ccode_write(CCode *code, FILE *stream) {
   for (size_t i = 0; i < code->count; i++) {
     fprintf(stream, "%s\n", code->lines[i]);
@@ -429,6 +453,120 @@ void ccode_write(CCode *code, FILE *stream) {
 
 // === Transpiler ===
 // Feeling this out, will need to be dramatically rewritten
+
+static const TRule TRANSPILE_RULES[] = {
+    {"#include", t2_include},
+    {"fn", t2_fn},
+    {"return", t2_return},
+    {".*", t2_call},
+};
+#define TRANSPILE_RULE_LEN (sizeof(TRANSPILE_RULES) / sizeof(TRule))
+
+void t2_return(Obj *o, CCode *code) {
+  assert(o->tag == SEXP);
+  assert(o->sexp->len == 2);
+
+  Obj *t = o->sexp->buffer[1];
+  assert(t->tag == ATOM);
+  ccode_printf_line(code, "#line %zu", t->beg.row + 1);
+  ccode_printf_line(code, "return %s;", t->atom->buffer);
+}
+
+void t2_include(Obj *o, CCode *code) {
+  assert(o->tag == SEXP);
+  assert(o->sexp->len > 1);
+
+  for (size_t i = 1; i < o->sexp->len; i++) {
+    Obj *t = o->sexp->buffer[i];
+    // Will need to be extended to evaluate statically
+    assert(t->tag == ATOM);
+
+    ccode_printf_line(code, "#line %zu", t->beg.row + 1);
+    ccode_printf_line(code, "#include %s;", t->atom->buffer);
+  }
+}
+
+void t2_call(Obj *o, CCode *code) {
+  assert(o->tag == SEXP);
+  assert(o->sexp->len > 0);
+
+  ccode_printf_line(code, "#line %d", o->beg.row + 1);
+  ccode_printf_line(code, "%s(", o->sexp->buffer[0]->atom->buffer);
+
+  for (size_t j = 1; j < o->sexp->len; j++) {
+    ccode_printf_line(code, "#line %d", o->sexp->buffer[j]->beg.row + 1);
+    ccode_printf_line(code, "%s,", o->sexp->buffer[j]->atom->buffer);
+  }
+
+  ccode_printf_line(code, ");");
+}
+
+void t2_fn(Obj *o, CCode *code) {
+  assert(o->tag == SEXP);
+  assert(o->sexp->len >= 5);
+
+  Obj *name = o->sexp->buffer[1];
+  Obj *type = o->sexp->buffer[2];
+  assert(type->atom->buffer[0] == ':');
+
+  ccode_printf_line(code, "#line %d", name->beg.row + 1);
+  ccode_printf_line(code, "%s %s (", type->atom->buffer + 1,
+                    name->atom->buffer);
+
+  Obj *args = o->sexp->buffer[3];
+  assert(args->tag == SEXP);
+  for (size_t j = 0; j < args->sexp->len; j += 2) {
+    Obj *arg_name = args->sexp->buffer[j];
+    Obj *arg_type = args->sexp->buffer[j + 1];
+    assert(arg_type->atom->buffer[0] == ':');
+
+    ccode_printf_line(code, "#line %d", arg_name->beg.row + 1);
+    ccode_printf_line(code, "  %s %s,", arg_type->atom->buffer + 1,
+                      arg_name->atom->buffer);
+  }
+
+  ccode_printf_line(code, ") {");
+
+  t2_obj(o->sexp->buffer[4], code);
+
+  ccode_printf_line(code, "}");
+}
+
+void t2_obj(Obj *o, CCode *code) {
+  static regex_t TRANSPILE_REGEXES[TRANSPILE_RULE_LEN];
+  static bool initialized = false;
+  if (!initialized) {
+    for (size_t i = 0; i < TRANSPILE_RULE_LEN; i++) {
+      assert(regcomp(&TRANSPILE_REGEXES[i], TRANSPILE_RULES[i].match,
+                     REG_EXTENDED | REG_NOSUB) == 0);
+    }
+    initialized = true;
+  }
+
+  if (o->tag == SEXP) {
+    assert(o->sexp->len > 0);
+    for (size_t i = 0; i < TRANSPILE_RULE_LEN; i++) {
+      int result = regexec(&TRANSPILE_REGEXES[i],
+                           o->sexp->buffer[0]->atom->buffer, i, NULL, 0);
+      if (result != REG_NOMATCH) {
+        TRANSPILE_RULES[i].fn(o, code);
+        break;
+      }
+    }
+  } else {
+    assert(o->tag == ATOM);
+  }
+}
+
+CCode *t2(List *list) {
+  CCode *code = ccode_init();
+
+  for (size_t i = 0; i < list->len; i++) {
+    t2_obj(list->buffer[i], code);
+  }
+
+  return code;
+}
 
 void transpile_include(Obj *o, CCode *code) {
   assert(o->sexp->len == 2);
@@ -572,7 +710,8 @@ int main(int argc, char **argv) {
 
   Parser *parser = parser_init(argv[1]);
   parser_parse(parser);
-  CCode *code = transpile(parser->list);
+  // CCode *code = transpile(parser->list);
+  CCode *code = t2(parser->list);
   parser_free(parser);
 
   FILE *fp = fopen(argv[2], "w");
@@ -624,11 +763,16 @@ void test_transpile() {
   parser_parse(parser);
   parser_print(parser);
   CCode *code = transpile(parser->list);
+  CCode *code2 = t2(parser->list);
   parser_free(parser);
 
   printf("\n\n");
   ccode_write(code, stdout);
   ccode_free(code);
+
+  printf("\n\n");
+  ccode_write(code2, stdout);
+  ccode_free(code2);
 }
 
 int main(int argc, char **argv) {
