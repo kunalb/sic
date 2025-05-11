@@ -325,7 +325,21 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
 #endif
 
     if (atom != NULL) {
-      if (isspace(ch) || ch == ')') {
+      bool finished = false;
+      if (atom->len > 0 && atom->buffer[0] == '"') {
+        if (ch == '"') {
+          size_t escapes = 0;
+          size_t idx = atom->len - 1;
+          while (atom->buffer[idx--] == '\\' && idx >= 0)
+            escapes++;
+          if ((escapes & 1) == 0)
+            finished = true;
+        }
+      } else if (isspace(ch) || ch == ')') {
+        finished = true;
+      }
+
+      if (finished) {
         atom_add(atom, '\0');
         return;
       }
