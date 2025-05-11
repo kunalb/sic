@@ -475,6 +475,11 @@ static const TRule TRANSPILE_RULES[] = {
     {"#include", transpile_include},
     {"fn", transpile_fn},
     {"return", transpile_return},
+    {"deref", NULL},
+    {"decl", NULL},
+    {"set", NULL},
+    {"while", NULL},
+    {":.*", NULL},
     {".*", transpile_call},
 };
 #define TRANSPILE_RULE_LEN (sizeof(TRANSPILE_RULES) / sizeof(TRule))

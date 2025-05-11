@@ -2,6 +2,7 @@
 (#include <stdlib.h>)
 (#include <string.h>)
 
+
 (fn compare :int (a :void* b :void*)
  (return (deref (:int* a)) - (deref (:int* b))))
 
