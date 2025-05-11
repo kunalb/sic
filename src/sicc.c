@@ -88,6 +88,7 @@ struct Obj {
 
 Obj *obj_init(Tag tag);
 void obj_free(Obj *obj);
+void obj_print(Obj *obj);
 
 struct Parser {
   List *list;
@@ -104,6 +105,13 @@ void transpile_include(Obj *o, CCode *code);
 void transpile_fn(Obj *o, CCode *code);
 void transpile_call(Obj *o, CCode *code);
 void transpile_obj(Obj *o, CCode *code);
+void transpile_binary_op(Obj *o, CCode *code);
+void transpile_deref(Obj *o, CCode *code);
+void transpile_decl(Obj *o, CCode *code);
+void transpile_set(Obj *o, CCode *code);
+void transpile_while(Obj *o, CCode *code);
+void transpile_cast(Obj *o, CCode *code);
+void transpile_op_assign(Obj *o, CCode *code);
 
 // === Implementations ===
 
@@ -213,6 +221,30 @@ void obj_free(Obj *obj) {
   };
 
   free(obj);
+}
+
+void obj_print(Obj *obj) {
+  switch (obj->tag) {
+  case SEXP:
+    printf("SEXP: (");
+    for (size_t i = 0; i < obj->sexp->len; i++) {
+      if (i > 0)
+        printf(" ");
+      switch (obj->sexp->buffer[i]->tag) {
+      case ATOM:
+        printf("%s", obj->sexp->buffer[i]->atom->buffer);
+        break;
+      case SEXP:
+        printf("[%zu]", obj->sexp->buffer[i]->sexp->len);
+        break;
+      }
+    }
+    printf(") [%zu]\n", obj->sexp->len);
+    break;
+  case ATOM:
+    printf("ATOM: %s\n", obj->atom->buffer);
+    break;
+  }
 }
 
 // ==== List handling ====
@@ -472,17 +504,27 @@ void ccode_write(CCode *code, FILE *stream) {
 // Feeling this out, will need to be dramatically rewritten
 
 static const TRule TRANSPILE_RULES[] = {
-    {"#include", transpile_include},
-    {"fn", transpile_fn},
-    {"return", transpile_return},
-    {"deref", NULL},
-    {"decl", NULL},
-    {"set", NULL},
-    {"while", NULL},
-    {":.*", NULL},
+    {"#include", transpile_include},  {"fn", transpile_fn},
+    {"return", transpile_return},     {"[+*/-]", transpile_binary_op},
+    {"[+*/-]=", transpile_op_assign}, {"deref", transpile_deref},
+    {"decl", transpile_decl},         {"set", transpile_set},
+    {"while", transpile_while},       {":.*", transpile_cast},
     {".*", transpile_call},
 };
 #define TRANSPILE_RULE_LEN (sizeof(TRANSPILE_RULES) / sizeof(TRule))
+
+void transpile_binary_op(Obj *o, CCode *code) {
+  assert(o->tag == SEXP);
+  assert(o->sexp->len >= 3);
+}
+
+void transpile_decl(Obj *o, CCode *code) {}
+
+void transpile_set(Obj *o, CCode *code){};
+void transpile_while(Obj *o, CCode *code){};
+void transpile_cast(Obj *o, CCode *code){};
+void transpile_op_assign(Obj *o, CCode *code){};
+void transpile_deref(Obj *o, CCode *code) {}
 
 void transpile_return(Obj *o, CCode *code) {
   assert(o->tag == SEXP);
@@ -557,10 +599,17 @@ void transpile_fn(Obj *o, CCode *code) {
 }
 
 void transpile_obj(Obj *o, CCode *code) {
+#ifdef DEBUG
+  obj_print(o);
+#endif
+
   static regex_t TRANSPILE_REGEXES[TRANSPILE_RULE_LEN];
   static bool initialized = false;
   if (!initialized) {
     for (size_t i = 0; i < TRANSPILE_RULE_LEN; i++) {
+#ifdef DEBUG
+      printf("REGEX: %s\n", TRANSPILE_RULES[i].match);
+#endif
       assert(regcomp(&TRANSPILE_REGEXES[i], TRANSPILE_RULES[i].match,
                      REG_EXTENDED | REG_NOSUB) == 0);
     }

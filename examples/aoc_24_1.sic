@@ -4,7 +4,7 @@
 
 
 (fn compare :int (a :void* b :void*)
- (return (deref (:int* a)) - (deref (:int* b))))
+ (return (- (deref (:int* a)) (deref (:int* b)))))
 
 
 (fn main :int (argc :int argv :char**)
@@ -24,7 +24,7 @@
  (qsort list2 count (sizeof int) compare)
 
  (decl sum :int 0)
- (for ((i :int 0) (< i count) (++ i))
+ (for ((decl i :int 0) (< i count) (++ i))
   (+= sum (abs (- list1[i] list2[i]))))
 
  (printf "%d\n" sum)
