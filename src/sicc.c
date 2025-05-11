@@ -326,14 +326,17 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
 
     if (atom != NULL) {
       bool finished = false;
-      if (atom->len > 0 && atom->buffer[0] == '"') {
-        if (ch == '"') {
+      if (atom->len > 0 &&
+          (atom->buffer[0] == '"' || atom->buffer[0] == '\'')) {
+        if (ch == atom->buffer[0]) {
           size_t escapes = 0;
           size_t idx = atom->len - 1;
           while (atom->buffer[idx--] == '\\' && idx >= 0)
             escapes++;
-          if ((escapes & 1) == 0)
+          if ((escapes & 1) == 0) {
+            atom_add(atom, srcfile_getc(parser->srcfile));
             finished = true;
+          }
         }
       } else if (isspace(ch) || ch == ')') {
         finished = true;
