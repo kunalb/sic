@@ -499,7 +499,7 @@ void transpile_include(Obj *o, CCode *code) {
     assert(t->tag == ATOM);
 
     ccode_printf_line(code, "#line %zu", t->beg.row + 1);
-    ccode_printf_line(code, "#include %s;", t->atom->buffer);
+    ccode_printf_line(code, "#include %s", t->atom->buffer);
   }
 }
 
@@ -512,7 +512,8 @@ void transpile_call(Obj *o, CCode *code) {
 
   for (size_t j = 1; j < o->sexp->len; j++) {
     ccode_printf_line(code, "#line %d", o->sexp->buffer[j]->beg.row + 1);
-    ccode_printf_line(code, "%s,", o->sexp->buffer[j]->atom->buffer);
+    ccode_printf_line(code, "%s%s", o->sexp->buffer[j]->atom->buffer,
+                      j == o->sexp->len - 1 ? "" : ",");
   }
 
   ccode_printf_line(code, ");");
@@ -538,8 +539,9 @@ void transpile_fn(Obj *o, CCode *code) {
     assert(arg_type->atom->buffer[0] == ':');
 
     ccode_printf_line(code, "#line %d", arg_name->beg.row + 1);
-    ccode_printf_line(code, "  %s %s,", arg_type->atom->buffer + 1,
-                      arg_name->atom->buffer);
+    ccode_printf_line(code, "  %s %s%s", arg_type->atom->buffer + 1,
+                      arg_name->atom->buffer,
+                      j == args->sexp->len - 2 ? "" : ",");
   }
 
   ccode_printf_line(code, ") {");
