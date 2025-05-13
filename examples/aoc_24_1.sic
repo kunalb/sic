@@ -8,10 +8,10 @@
 
 
 (fn main :int (argc :int argv :char**)
- (decl line char[1024])
- (decl list1 int[8096])
- (decl list2 int[8096])
- (decl count int 0)
+ (decl line :char[1024])
+ (decl list1 :int[8096])
+ (decl list2 :int[8096])
+ (decl count :int 0)
 
  (while (!= (fgets line 1024 stdin) NULL)
   (decl token1 :char* (strtok line " "))
@@ -24,7 +24,9 @@
  (qsort list2 count (sizeof int) compare)
 
  (decl sum :int 0)
- (for ((decl i :int 0) (< i count) (++ i))
+ (for (decl i :int 0)
+      (< i count)
+      (++ i)
   (+= sum (abs (- list1[i] list2[i]))))
 
  (printf "%d\n" sum)
