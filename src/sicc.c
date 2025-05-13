@@ -503,9 +503,9 @@ char *ccode_printf_line(CCode *code, const char *format, ...) {
   return line;
 }
 
-char *ccode_mark_line(CCode *code, Obj *o) {
+void ccode_mark_line(CCode *code, Obj *o) {
 #ifndef DISABLE_LINE
-  return ccode_printf_line(code, "#line %d", o->beg.row + 1);
+  ccode_printf_line(code, "#line %d", o->beg.row + 1);
 #endif
 }
 
@@ -522,8 +522,8 @@ static const TRule TRANSPILE_RULES[] = {
     {"^#include$", transpile_include, STATEMENT},
     {"^fn$", transpile_fn, STATEMENT},
     {"^return$", transpile_return, STATEMENT},
-    {"^([+*/-]|<|>|<=|>=|==)$", transpile_binary_op, EXPRESSION},
     {"^[+*/-]=$", transpile_op_assign, STATEMENT},
+    {"^([+*/-]|<|>|<=|>=|==|!=)$", transpile_binary_op, EXPRESSION},
     {"^deref$", transpile_deref, EXPRESSION},
     {"^decl$", transpile_decl, STATEMENT},
     {"^set$", transpile_set, STATEMENT},
@@ -575,9 +575,9 @@ void transpile_set(Obj *o, CCode *code) {
   assert(o->sexp->buffer[1]->tag == ATOM);
 
   ccode_mark_line(code, o);
-  ccode_printf_line(code, "%s = (", o->sexp->buffer[1]);
+  ccode_printf_line(code, "%s = (", o->sexp->buffer[1]->atom->buffer);
   transpile_expression(o->sexp->buffer[2], code);
-  ccode_printf_line(code, ");", o->sexp->buffer[1]);
+  ccode_printf_line(code, ");");
 };
 
 void transpile_while(Obj *o, CCode *code) {
@@ -604,7 +604,17 @@ void transpile_cast(Obj *o, CCode *code) {
   ccode_printf_line(code, ")");
 };
 
-void transpile_op_assign(Obj *o, CCode *code){};
+void transpile_op_assign(Obj *o, CCode *code) {
+  assert(o->tag == SEXP);
+  assert(o->sexp->len >= 3);
+  assert(o->sexp->buffer[1]->tag == ATOM);
+
+  ccode_mark_line(code, o);
+  ccode_printf_line(code, "%s %s (", o->sexp->buffer[1]->atom->buffer,
+                    o->sexp->buffer[0]->atom->buffer);
+  transpile_expression(o->sexp->buffer[2], code);
+  ccode_printf_line(code, ");", o->sexp->buffer[1]);
+};
 
 void transpile_deref(Obj *o, CCode *code) {
   assert(o->tag == SEXP);
@@ -649,13 +659,16 @@ void transpile_call(Obj *o, CCode *code) {
   assert(o->tag == SEXP);
   assert(o->sexp->len > 0);
 
+  assert(o->sexp->buffer[0]->tag == ATOM);
+
   ccode_mark_line(code, o);
   ccode_printf_line(code, "%s(", o->sexp->buffer[0]->atom->buffer);
 
   for (size_t j = 1; j < o->sexp->len; j++) {
-    ccode_mark_line(code, o->sexp->buffer[j]);
-    ccode_printf_line(code, "%s%s", o->sexp->buffer[j]->atom->buffer,
-                      j == o->sexp->len - 1 ? "" : ",");
+    if (j > 1) {
+      ccode_printf_line(code, ",");
+    }
+    transpile_expression(o->sexp->buffer[j], code);
   }
 
   ccode_printf_line(code, ")");
@@ -706,7 +719,7 @@ void transpile_for(Obj *o, CCode *code) {
   ccode_printf_line(code, ";");
   transpile_expression(o->sexp->buffer[3], code);
   ccode_printf_line(code, ") {");
-  for (size_t i = 5; i < o->sexp->len; i++) {
+  for (size_t i = 4; i < o->sexp->len; i++) {
     transpile_statement(o->sexp->buffer[i], code);
   }
   ccode_printf_line(code, "}");
