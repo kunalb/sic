@@ -558,14 +558,31 @@ void transpile_decl(Obj *o, CCode *code) {
 
   ccode_mark_line(code, o);
 
+  char *typestr = o->sexp->buffer[2]->atom->buffer + 1;
+  char *plaintype = NULL;
+  char *arr_pt = strchr(typestr, '[');
+  if (arr_pt) {
+    size_t n = arr_pt - typestr;
+    plaintype = malloc(arr_pt - typestr + 1);
+    strncpy(plaintype, typestr, arr_pt - typestr);
+    plaintype[n] = '\0';
+    typestr = plaintype;
+  } else {
+    arr_pt = "";
+  }
+
   if (o->sexp->len > 3) {
-    ccode_printf_line(code, "%s %s = (", o->sexp->buffer[2]->atom->buffer + 1,
-                      o->sexp->buffer[1]->atom->buffer);
+    ccode_printf_line(code, "%s %s%s = (", typestr,
+                      o->sexp->buffer[1]->atom->buffer, arr_pt);
     transpile_expression(o->sexp->buffer[3], code);
     ccode_printf_line(code, ");");
   } else {
-    ccode_printf_line(code, "%s %s;", o->sexp->buffer[2]->atom->buffer + 1,
-                      o->sexp->buffer[1]->atom->buffer);
+    ccode_printf_line(code, "%s %s%s;", typestr,
+                      o->sexp->buffer[1]->atom->buffer, arr_pt);
+  }
+
+  if (plaintype != NULL) {
+    free(plaintype);
   }
 }
 
