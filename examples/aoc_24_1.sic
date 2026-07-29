@@ -3,8 +3,8 @@
 (#include <string.h>)
 
 
-(fn compare :int (a :void* b :void*)
- (return (- (deref (:int* a)) (deref (:int* b)))))
+(fn compare :int (a :const-void* b :const-void*)
+ (return (- (deref (:const-int* a)) (deref (:const-int* b)))))
 
 
 (fn main :int (argc :int argv :char**)

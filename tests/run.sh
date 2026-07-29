@@ -22,7 +22,7 @@ for src in examples/*.sic tests/cases/*.sic; do
     continue
   fi
 
-  if ! ${CC:-cc} -Wall -o "$bin" "$cfile" 2>"tests/out/$name.cc.log"; then
+  if ! ${CC:-cc} -Wall -Werror -o "$bin" "$cfile" 2>"tests/out/$name.cc.log"; then
     echo "FAIL $name (compile, see tests/out/$name.cc.log)"
     fail=$((fail + 1))
     continue

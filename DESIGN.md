@@ -24,6 +24,20 @@ mostly comment-free. Newest entries at the bottom of each section.
   different things depending on where it appears — so the ternary gets its
   own head (`?:`) instead of overloading `if`.
 
+## Types
+
+- Types are single atoms starting with `:`, and hyphens translate to
+  spaces: `:const-char*` → `const char*`, `:unsigned-long` →
+  `unsigned long`, `:struct-Point*` → `struct Point *`. Hyphens are
+  illegal in C type names so the mapping can't collide; translation stops
+  at `[` so array-size expressions like `x[N-1]` are left alone. Storage
+  classes ride along for free (`:static-int`).
+- Function-pointer types can't be written yet — they need parentheses,
+  which the reader would split into a sexp. They'll likely become a
+  dedicated form (e.g. `(fnptr ret (args))`) once needed.
+- Generated code must compile warning-free: the test harness builds with
+  -Wall -Werror.
+
 ## Diagnostics
 
 - Malformed input produces `file:row:col: error: message` and exits

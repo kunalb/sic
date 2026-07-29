@@ -126,6 +126,7 @@ void transpile_ternary(Obj *o, CCode *code);
 void transpile_incdec(Obj *o, CCode *code);
 void transpile_aref(Obj *o, CCode *code);
 void transpile_member(Obj *o, CCode *code);
+void transpile_sizeof(Obj *o, CCode *code);
 
 // === Implementations ===
 
@@ -582,6 +583,19 @@ void ccode_write(CCode *code, FILE *stream) {
 // === Transpiler ===
 // Feeling this out, will need to be dramatically rewritten
 
+// ":const-char*" becomes a malloc'd "const char*"; hyphens are illegal in
+// C type names so the mapping is unambiguous. Translation stops at '[' to
+// leave array-size expressions alone.
+char *type_to_c(const char *atom) {
+  char *type = CHECK_ALLOC(strdup(atom + 1));
+  for (char *p = type; *p != '\0' && *p != '['; p++) {
+    if (*p == '-') {
+      *p = ' ';
+    }
+  }
+  return type;
+}
+
 static const TRule TRANSPILE_RULES[] = {
     {"^#include$", transpile_include, STATEMENT},
     {"^fn$", transpile_fn, STATEMENT},
@@ -600,6 +614,7 @@ static const TRule TRANSPILE_RULES[] = {
     {"^if$", transpile_if, STATEMENT},
     {"^do$", transpile_do, STATEMENT},
     {"^\\?:$", transpile_ternary, EXPRESSION},
+    {"^sizeof$", transpile_sizeof, EXPRESSION},
     {"^:.*$", transpile_cast, EXPRESSION},
     {".*", transpile_call, EXPRESSION},
 };
@@ -654,32 +669,21 @@ void transpile_decl(Obj *o, CCode *code) {
 
   ccode_mark_line(code, o);
 
-  char *typestr = o->sexp->buffer[2]->atom->buffer + 1;
-  char *plaintype = NULL;
-  char *arr_pt = strchr(typestr, '[');
-  if (arr_pt) {
-    size_t n = arr_pt - typestr;
-    plaintype = malloc(arr_pt - typestr + 1);
-    strncpy(plaintype, typestr, arr_pt - typestr);
-    plaintype[n] = '\0';
-    typestr = plaintype;
-  } else {
-    arr_pt = "";
+  char *type = type_to_c(o->sexp->buffer[2]->atom->buffer);
+  char *arr = strchr(type, '[');
+  if (arr == NULL) {
+    arr = type + strlen(type);
   }
 
+  ccode_printf_line(code, "%.*s %s%s", (int)(arr - type), type,
+                    o->sexp->buffer[1]->atom->buffer, arr);
   if (o->sexp->len > 3) {
-    ccode_printf_line(code, "%s %s%s = ", typestr,
-                      o->sexp->buffer[1]->atom->buffer, arr_pt);
+    ccode_append(code, " = ");
     transpile_expression(o->sexp->buffer[3], code);
-    ccode_append(code, ";");
-  } else {
-    ccode_printf_line(code, "%s %s%s;", typestr,
-                      o->sexp->buffer[1]->atom->buffer, arr_pt);
   }
+  ccode_append(code, ";");
 
-  if (plaintype != NULL) {
-    free(plaintype);
-  }
+  free(type);
 }
 
 void transpile_set(Obj *o, CCode *code) {
@@ -756,7 +760,9 @@ void transpile_cast(Obj *o, CCode *code) {
     fail_at(o->beg, "a cast takes exactly one value, e.g. (:int x)");
   }
 
-  ccode_append(code, "((%s)", o->sexp->buffer[0]->atom->buffer + 1);
+  char *type = type_to_c(o->sexp->buffer[0]->atom->buffer);
+  ccode_append(code, "((%s)", type);
+  free(type);
   transpile_expression(o->sexp->buffer[1], code);
   ccode_append(code, ")");
 };
@@ -838,8 +844,9 @@ void transpile_fn(Obj *o, CCode *code) {
   Obj *type = o->sexp->buffer[2];
 
   ccode_mark_line(code, name);
-  ccode_printf_line(code, "%s %s(", type->atom->buffer + 1,
-                    name->atom->buffer);
+  char *ret = type_to_c(type->atom->buffer);
+  ccode_printf_line(code, "%s %s(", ret, name->atom->buffer);
+  free(ret);
 
   Obj *args = o->sexp->buffer[3];
   if (args->tag != SEXP || (args->sexp->len & 1) != 0) {
@@ -855,8 +862,10 @@ void transpile_fn(Obj *o, CCode *code) {
               "fn arguments must be name :type pairs, e.g. (argc :int)");
     }
 
-    ccode_append(code, "%s%s %s", j == 0 ? "" : ", ",
-                 arg_type->atom->buffer + 1, arg_name->atom->buffer);
+    char *arg = type_to_c(arg_type->atom->buffer);
+    ccode_append(code, "%s%s %s", j == 0 ? "" : ", ", arg,
+                 arg_name->atom->buffer);
+    free(arg);
   }
 
   ccode_append(code, ") {");
@@ -912,6 +921,23 @@ void transpile_do(Obj *o, CCode *code) {
     transpile_statement(o->sexp->buffer[i], code);
   }
   ccode_printf_line(code, "}");
+}
+
+void transpile_sizeof(Obj *o, CCode *code) {
+  if (o->sexp->len != 2) {
+    fail_at(o->beg, "sizeof takes exactly one operand");
+  }
+
+  Obj *t = o->sexp->buffer[1];
+  if (t->tag == ATOM && t->atom->buffer[0] == ':') {
+    char *type = type_to_c(t->atom->buffer);
+    ccode_append(code, "sizeof(%s)", type);
+    free(type);
+  } else {
+    ccode_append(code, "sizeof(");
+    transpile_expression(t, code);
+    ccode_append(code, ")");
+  }
 }
 
 void transpile_ternary(Obj *o, CCode *code) {

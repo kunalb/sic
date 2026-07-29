@@ -1,0 +1,21 @@
+(#include <stdio.h>)
+
+(fn scale :double (x :double k :int)
+  (return (* x (:double k))))
+
+(fn main :int (argc :int argv :char**)
+  (decl total :unsigned-long 0)
+  (+= total 4000000000)
+  (printf "%lu\n" total)
+
+  (decl msg :const-char* "hi")
+  (printf "%s\n" msg)
+
+  (printf "%.1f\n" (scale 2.5 3))
+  (printf "%zu\n" (sizeof :unsigned-char))
+  (printf "%zu\n" (sizeof total))
+
+  (decl grid :int[2][2])
+  (set (aref grid 1 1) 9)
+  (printf "%d\n" (aref grid 1 1))
+  (return 0))
