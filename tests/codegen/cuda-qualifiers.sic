@@ -1,0 +1,11 @@
+; CUDA qualifiers need no dedicated forms: they ride on hyphen-types,
+; and builtins like threadIdx.x pass through as plain atoms.
+(fn add :__global__-void (out :float* a :float* b :float*)
+  (decl i :int (+ (* blockIdx.x blockDim.x) threadIdx.x))
+  (set (aref out i) (+ (aref a i) (aref b i))))
+
+(fn smooth :__device__-float (v :float*)
+  (decl tile :__shared__-float[256])
+  (set (aref tile threadIdx.x) (aref v threadIdx.x))
+  (__syncthreads)
+  (return (aref tile threadIdx.x)))

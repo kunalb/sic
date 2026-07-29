@@ -13,6 +13,10 @@ mostly comment-free. Newest entries at the bottom of each section.
   in `sicc.c`, which is why the old `#ifdef TEST` main was removed.
 - `examples/` doubles as the showcase and the integration suite;
   `tests/cases/` holds small programs that each exercise one language form.
+- `tests/codegen/` holds transpile-only golden tests: the generated C
+  itself (minus `#line` markers) is diffed against a checked-in `.c`
+  file. For pinning emission details the run-tests can't observe, and
+  for targets this machine can't compile or run (CUDA).
 
 ## Transpiler rules
 
