@@ -123,6 +123,7 @@ void transpile_for(Obj *o, CCode *code);
 void transpile_if(Obj *o, CCode *code);
 void transpile_do(Obj *o, CCode *code);
 void transpile_ternary(Obj *o, CCode *code);
+void transpile_incdec(Obj *o, CCode *code);
 
 // === Implementations ===
 
@@ -583,8 +584,10 @@ static const TRule TRANSPILE_RULES[] = {
     {"^#include$", transpile_include, STATEMENT},
     {"^fn$", transpile_fn, STATEMENT},
     {"^return$", transpile_return, STATEMENT},
-    {"^[+*/-]=$", transpile_op_assign, STATEMENT},
-    {"^([+*/-]|<|>|<=|>=|==|!=)$", transpile_binary_op, EXPRESSION},
+    {"^([-+*/%&|^]=|<<=|>>=)$", transpile_op_assign, STATEMENT},
+    {"^(\\+\\+|--)$", transpile_incdec, EXPRESSION},
+    {"^(\\+|-|\\*|/|%|<|>|<=|>=|==|!=|&&|\\|\\||&|\\||\\^|<<|>>|!|~)$",
+     transpile_binary_op, EXPRESSION},
     {"^deref$", transpile_deref, EXPRESSION},
     {"^decl$", transpile_decl, STATEMENT},
     {"^set$", transpile_set, STATEMENT},
@@ -599,18 +602,42 @@ static const TRule TRANSPILE_RULES[] = {
 #define TRANSPILE_RULE_LEN (sizeof(TRANSPILE_RULES) / sizeof(TRule))
 
 void transpile_binary_op(Obj *o, CCode *code) {
+  char *op = o->sexp->buffer[0]->atom->buffer;
+  bool prefix_ok = op[1] == '\0' && strchr("+-*&!~", op[0]) != NULL;
+  bool prefix_only = op[1] == '\0' && (op[0] == '!' || op[0] == '~');
+
+  if (o->sexp->len == 2 && prefix_ok) {
+    ccode_append(code, "(%s", op);
+    transpile_expression(o->sexp->buffer[1], code);
+    ccode_append(code, ")");
+    return;
+  }
+
+  if (prefix_only) {
+    fail_at(o->beg, "operator '%s' takes exactly one operand", op);
+  }
   if (o->sexp->len < 3) {
-    fail_at(o->beg, "operator '%s' needs at least two operands",
-            o->sexp->buffer[0]->atom->buffer);
+    fail_at(o->beg, "operator '%s' needs at least two operands", op);
   }
 
   ccode_append(code, "(");
   for (size_t i = 1; i < o->sexp->len; i++) {
     if (i != 1) {
-      ccode_append(code, " %s ", o->sexp->buffer[0]->atom->buffer);
+      ccode_append(code, " %s ", op);
     }
     transpile_expression(o->sexp->buffer[i], code);
   }
+  ccode_append(code, ")");
+}
+
+void transpile_incdec(Obj *o, CCode *code) {
+  if (o->sexp->len != 2) {
+    fail_at(o->beg, "'%s' takes exactly one operand",
+            o->sexp->buffer[0]->atom->buffer);
+  }
+
+  ccode_append(code, "(%s", o->sexp->buffer[0]->atom->buffer);
+  transpile_expression(o->sexp->buffer[1], code);
   ccode_append(code, ")");
 }
 
