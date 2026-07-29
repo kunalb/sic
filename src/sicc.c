@@ -855,12 +855,12 @@ void transpile_call(Obj *o, CCode *code) {
 }
 
 void transpile_fn(Obj *o, CCode *code) {
-  if (o->sexp->len < 5 || o->sexp->buffer[1]->tag != ATOM ||
+  if (o->sexp->len < 4 || o->sexp->buffer[1]->tag != ATOM ||
       o->sexp->buffer[2]->tag != ATOM ||
       o->sexp->buffer[2]->atom->buffer[0] != ':') {
     fail_at(o->beg,
-            "fn needs a name, a :type, an argument list, and a body, "
-            "e.g. (fn main :int (argc :int argv :char**) ...)");
+            "fn needs a name, a :type, an argument list, and an optional "
+            "body, e.g. (fn main :int (argc :int argv :char**) ...)");
   }
 
   Obj *name = o->sexp->buffer[1];
@@ -889,6 +889,11 @@ void transpile_fn(Obj *o, CCode *code) {
     ccode_append(code, "%s%s %s", j == 0 ? "" : ", ", arg,
                  arg_name->atom->buffer);
     free(arg);
+  }
+
+  if (o->sexp->len == 4) {
+    ccode_append(code, ");");
+    return;
   }
 
   ccode_append(code, ") {");

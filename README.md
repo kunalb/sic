@@ -79,6 +79,8 @@ ternary is `(?: cond a b)`; `sizeof` takes a value or a type:
 
 ```lisp
 (fn main :int (argc :int argv :char**) stmt...)
+(fn is_odd :int (n :int))        ; no body: a prototype / forward declaration
+(decl errno_copy :extern-int)    ; storage classes ride along in the type
 (struct Point x :int y :int)
 (union Word i :int c :char[4])
 (enum Color RED GREEN (BLUE 5))
