@@ -137,6 +137,7 @@ void transpile_undef(Obj *o, CCode *code);
 void transpile_guard(Obj *o, CCode *code);
 void transpile_hash_else(Obj *o, CCode *code);
 void transpile_pragma(Obj *o, CCode *code);
+void transpile_typeop(Obj *o, CCode *code);
 void transpile_do_while(Obj *o, CCode *code);
 void transpile_goto(Obj *o, CCode *code);
 
@@ -613,6 +614,14 @@ char *type_to_c(const char *atom) {
 void ccode_append_declarator(CCode *code, const char *type_atom,
                              const char *name) {
   char *type = type_to_c(type_atom);
+  char *bits = strchr(type, ':');
+  if (bits != NULL) {
+    ccode_append(code, "%.*s %s : %s", (int)(bits - type), type, name,
+                 bits + 1);
+    free(type);
+    return;
+  }
+
   char *arr = strchr(type, '[');
   if (arr == NULL) {
     arr = type + strlen(type);
@@ -670,7 +679,7 @@ static const TRule TRANSPILE_RULES[] = {
     {"^return$", transpile_return, STATEMENT},
     {"^([-+*/%&|^]=|<<=|>>=)$", transpile_op_assign, STATEMENT},
     {"^(\\+\\+|--)$", transpile_incdec, EXPRESSION},
-    {"^(\\+|-|\\*|/|%|<|>|<=|>=|==|!=|&&|\\|\\||&|\\||\\^|<<|>>|!|~)$",
+    {"^(\\+|-|\\*|/|%|<|>|<=|>=|==|!=|&&|\\|\\||&|\\||\\^|<<|>>|!|~|,)$",
      transpile_binary_op, EXPRESSION},
     {"^deref$", transpile_deref, EXPRESSION},
     {"^aref$", transpile_aref, EXPRESSION},
@@ -684,6 +693,7 @@ static const TRule TRANSPILE_RULES[] = {
     {"^\\?:$", transpile_ternary, EXPRESSION},
     {"^sizeof$", transpile_sizeof, EXPRESSION},
     {"^init$", transpile_init, EXPRESSION},
+    {"^(offsetof|alignof)$", transpile_typeop, EXPRESSION},
     {"^switch$", transpile_switch, STATEMENT},
     {"^do-while$", transpile_do_while, STATEMENT},
     {"^(goto|label)$", transpile_goto, STATEMENT},
@@ -1118,6 +1128,29 @@ void transpile_sizeof(Obj *o, CCode *code) {
     transpile_expression(t, code);
     ccode_append(code, ")");
   }
+}
+
+void transpile_typeop(Obj *o, CCode *code) {
+  char *head = o->sexp->buffer[0]->atom->buffer;
+  bool is_offsetof = strcmp(head, "offsetof") == 0;
+  size_t want = is_offsetof ? 3 : 2;
+
+  if (o->sexp->len != want || o->sexp->buffer[1]->tag != ATOM ||
+      o->sexp->buffer[1]->atom->buffer[0] != ':' ||
+      (is_offsetof && o->sexp->buffer[2]->tag != ATOM)) {
+    fail_at(o->beg,
+            is_offsetof ? "offsetof needs a :type and a field name"
+                        : "alignof needs a :type");
+  }
+
+  char *type = type_to_c(o->sexp->buffer[1]->atom->buffer);
+  if (is_offsetof) {
+    ccode_append(code, "offsetof(%s, %s)", type,
+                 o->sexp->buffer[2]->atom->buffer);
+  } else {
+    ccode_append(code, "_Alignof(%s)", type);
+  }
+  free(type);
 }
 
 void transpile_ternary(Obj *o, CCode *code) {

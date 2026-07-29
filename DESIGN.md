@@ -41,6 +41,16 @@ mostly comment-free. Newest entries at the bottom of each section.
 - Generated code must compile warning-free: the test harness builds with
   -Wall -Werror.
 
+## Deliberately unsupported (so far)
+
+- Multi-declarator statements (`int a, b;`) — write two `decl`s; most C
+  style guides discourage the combined form anyway.
+- String literal concatenation — use one literal with `\n` escapes.
+- Anonymous and nested struct/union definitions — name the inner type
+  and refer to it; revisit if tagged unions get painful in practice.
+- Casts to function-pointer types and `sizeof` of one — take a
+  `typedef`'d name first.
+
 ## Preprocessor
 
 - `#ifdef` / `#ifndef` / `#if` are wrapping forms — the body lives inside

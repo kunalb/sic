@@ -1,0 +1,19 @@
+(#include <stdio.h> <stddef.h>)
+
+(struct Flags ready :unsigned:1 mode :unsigned:3 count :int)
+(struct Pair a :char b :long)
+
+(fn main :int (argc :int argv :char**)
+  (decl f :struct-Flags (init 1 5 42))
+  (printf "%u %u %d\n" (. f ready) (. f mode) (. f count))
+
+  (printf "%d\n" (== (offsetof :struct-Pair a) 0))
+  (printf "%d\n" (> (offsetof :struct-Pair b) 0))
+  (printf "%zu\n" (alignof :char))
+
+  (decl total :int 0)
+  (decl j :int 10)
+  (for (decl k :int 0) (< k 3) (, (++ k) (-- j))
+    (+= total k))
+  (printf "%d %d\n" total j)
+  (return 0))

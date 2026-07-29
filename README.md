@@ -67,8 +67,9 @@ of structs. A cast around one makes a compound literal:
 && || & | ^ << >>`, e.g. `(+ a b c)` is `(a + b + c)`. Two-element forms
 of `+ - * & ! ~` are prefix operators, so `(- x)` negates, `(& x)` takes
 an address, and `(* p)` dereferences (`(deref p)` also works). The
-ternary is `(?: cond a b)`; `sizeof` takes a value or a type:
-`(sizeof x)`, `(sizeof :unsigned-char)`.
+ternary is `(?: cond a b)`; the comma operator is `(, a b)`. `sizeof`
+takes a value or a type — `(sizeof x)`, `(sizeof :unsigned-char)` — and
+`(offsetof :struct-Pair b)` / `(alignof :double)` take types.
 
 **Access**: `(aref a i j)` indexes (chainable), `(-> p field)` and
 `(. s field)` reach into structs and also chain: `(-> a b c)` is
@@ -94,6 +95,7 @@ ternary is `(?: cond a b)`; `sizeof` takes a value or a type:
 (fn sum :int (n :int ...) ...)   ; variadic; use va_list/va_start/va_arg as calls
 (decl errno_copy :extern-int)    ; storage classes ride along in the type
 (struct Point x :int y :int)
+(struct Flags ready :unsigned:1 mode :unsigned:3)   ; bitfields
 (union Word i :int c :char[4])
 (enum Color RED GREEN (BLUE 5))
 (typedef Point :struct-Point)
