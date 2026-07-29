@@ -44,5 +44,27 @@ for src in examples/*.sic tests/cases/*.sic; do
   fi
 done
 
+# Error tests: transpilation of tests/errors/*.sic must fail, and stderr
+# must contain the sibling .err file.
+for src in tests/errors/*.sic; do
+  [ -e "$src" ] || continue
+  name=$(basename "$src" .sic)
+
+  if ./sicc "$src" "tests/out/err-$name.c" 2>"tests/out/err-$name.log"; then
+    echo "FAIL $name (expected a transpile error)"
+    fail=$((fail + 1))
+    continue
+  fi
+
+  if grep -qF "$(cat "${src%.sic}.err")" "tests/out/err-$name.log"; then
+    pass=$((pass + 1))
+  else
+    echo "FAIL $name (wrong error)"
+    echo "  expected: $(cat "${src%.sic}.err")"
+    echo "  got:      $(cat "tests/out/err-$name.log")"
+    fail=$((fail + 1))
+  fi
+done
+
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

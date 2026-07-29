@@ -1,0 +1,1 @@
+tests/errors/bad-decl.sic:2:3: error: decl needs a name and a :type

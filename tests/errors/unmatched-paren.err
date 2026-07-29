@@ -1,0 +1,1 @@
+tests/errors/unmatched-paren.sic:1:1: error: unmatched ')'

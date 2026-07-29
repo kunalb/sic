@@ -1,0 +1,1 @@
+tests/errors/unclosed-paren.sic:1:1: error: unclosed '('

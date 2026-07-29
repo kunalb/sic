@@ -1,0 +1,2 @@
+(fn main :int (argc :int argv :char**)
+  (printf "oops))
