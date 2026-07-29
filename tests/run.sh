@@ -2,7 +2,7 @@
 # Golden tests: transpile each .sic file, compile it, run it (feeding
 # <name>.in if present), and compare stdout against <name>.out.
 set -u
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 
 mkdir -p tests/out
 pass=0
@@ -16,6 +16,13 @@ for src in examples/*.sic tests/cases/*.sic; do
   input="${src%.sic}.in"
   cfile="tests/out/$name.c"
   bin="tests/out/$name"
+  actual="tests/out/$name.actual"
+
+  if [ ! -f "$expected" ]; then
+    echo "FAIL $name (missing $expected)"
+    fail=$((fail + 1))
+    continue
+  fi
 
   if ! ./sicc "$src" "$cfile"; then
     echo "FAIL $name (transpile)"
@@ -30,17 +37,20 @@ for src in examples/*.sic tests/cases/*.sic; do
   fi
 
   if [ -f "$input" ]; then
-    actual=$("$bin" <"$input")
+    "$bin" <"$input" >"$actual"
   else
-    actual=$("$bin")
+    "$bin" >"$actual"
   fi
+  status=$?
 
-  if [ "$actual" = "$(cat "$expected")" ]; then
+  if [ "$status" -ne 0 ]; then
+    echo "FAIL $name (run exited $status)"
+    fail=$((fail + 1))
+  elif cmp -s "$expected" "$actual"; then
     pass=$((pass + 1))
   else
     echo "FAIL $name (output)"
-    echo "$actual" >"tests/out/$name.actual"
-    diff "$expected" "tests/out/$name.actual" | head -20
+    diff -u "$expected" "$actual" | head -20
     fail=$((fail + 1))
   fi
 done
@@ -79,8 +89,16 @@ fi
 for src in examples/*.cu.sic tests/cuda/*.cu.sic; do
   [ -e "$src" ] || continue
   name=$(basename "$src" .cu.sic)
+  expected="${src%.cu.sic}.out"
   cufile="tests/out/$name.cu"
   bin="tests/out/$name"
+  actual="tests/out/$name.actual"
+
+  if [ ! -f "$expected" ]; then
+    echo "FAIL $name (missing $expected)"
+    fail=$((fail + 1))
+    continue
+  fi
 
   if ! ./sicc "$src" "$cufile"; then
     echo "FAIL $name (transpile)"
@@ -106,13 +124,16 @@ for src in examples/*.cu.sic tests/cuda/*.cu.sic; do
     continue
   fi
 
-  actual=$("$bin")
-  if [ "$actual" = "$(cat "${src%.cu.sic}.out")" ]; then
+  "$bin" >"$actual"
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "FAIL $name (run exited $status)"
+    fail=$((fail + 1))
+  elif cmp -s "$expected" "$actual"; then
     pass=$((pass + 1))
   else
     echo "FAIL $name (output)"
-    echo "$actual" >"tests/out/$name.actual"
-    diff "${src%.cu.sic}.out" "tests/out/$name.actual" | head -20
+    diff -u "$expected" "$actual" | head -20
     fail=$((fail + 1))
   fi
 done

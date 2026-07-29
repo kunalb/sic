@@ -11,6 +11,9 @@ mostly comment-free. Newest entries at the bottom of each section.
   `.in` file if present). This exercises the full pipeline — parser,
   transpiler, and the validity of the generated C — with no test-only code
   in `sicc.c`, which is why the old `#ifdef TEST` main was removed.
+- A run passes only when the program exits zero and its stdout matches the
+  golden file byte-for-byte, including trailing newlines. Missing golden
+  files fail instead of being treated as empty output.
 - `examples/` doubles as the showcase and the integration suite;
   `tests/cases/` holds small programs that each exercise one language form.
 - `tests/codegen/` holds transpile-only golden tests: the generated C
