@@ -127,6 +127,9 @@ void transpile_incdec(Obj *o, CCode *code);
 void transpile_aref(Obj *o, CCode *code);
 void transpile_member(Obj *o, CCode *code);
 void transpile_sizeof(Obj *o, CCode *code);
+void transpile_struct(Obj *o, CCode *code);
+void transpile_enum(Obj *o, CCode *code);
+void transpile_typedef(Obj *o, CCode *code);
 
 // === Implementations ===
 
@@ -596,6 +599,19 @@ char *type_to_c(const char *atom) {
   return type;
 }
 
+// Appends "type name" with any array suffix moved after the name, as C
+// declarators want: (x :int[4]) becomes "int x[4]".
+void ccode_append_declarator(CCode *code, const char *type_atom,
+                             const char *name) {
+  char *type = type_to_c(type_atom);
+  char *arr = strchr(type, '[');
+  if (arr == NULL) {
+    arr = type + strlen(type);
+  }
+  ccode_append(code, "%.*s %s%s", (int)(arr - type), type, name, arr);
+  free(type);
+}
+
 static const TRule TRANSPILE_RULES[] = {
     {"^#include$", transpile_include, STATEMENT},
     {"^fn$", transpile_fn, STATEMENT},
@@ -615,6 +631,9 @@ static const TRule TRANSPILE_RULES[] = {
     {"^do$", transpile_do, STATEMENT},
     {"^\\?:$", transpile_ternary, EXPRESSION},
     {"^sizeof$", transpile_sizeof, EXPRESSION},
+    {"^(struct|union)$", transpile_struct, STATEMENT},
+    {"^enum$", transpile_enum, STATEMENT},
+    {"^typedef$", transpile_typedef, STATEMENT},
     {"^:.*$", transpile_cast, EXPRESSION},
     {".*", transpile_call, EXPRESSION},
 };
@@ -668,22 +687,14 @@ void transpile_decl(Obj *o, CCode *code) {
   }
 
   ccode_mark_line(code, o);
-
-  char *type = type_to_c(o->sexp->buffer[2]->atom->buffer);
-  char *arr = strchr(type, '[');
-  if (arr == NULL) {
-    arr = type + strlen(type);
-  }
-
-  ccode_printf_line(code, "%.*s %s%s", (int)(arr - type), type,
-                    o->sexp->buffer[1]->atom->buffer, arr);
+  ccode_printf_line(code, "");
+  ccode_append_declarator(code, o->sexp->buffer[2]->atom->buffer,
+                          o->sexp->buffer[1]->atom->buffer);
   if (o->sexp->len > 3) {
     ccode_append(code, " = ");
     transpile_expression(o->sexp->buffer[3], code);
   }
   ccode_append(code, ";");
-
-  free(type);
 }
 
 void transpile_set(Obj *o, CCode *code) {
@@ -952,6 +963,69 @@ void transpile_ternary(Obj *o, CCode *code) {
   ccode_append(code, " : ");
   transpile_expression(o->sexp->buffer[3], code);
   ccode_append(code, ")");
+}
+
+void transpile_struct(Obj *o, CCode *code) {
+  char *kind = o->sexp->buffer[0]->atom->buffer;
+  if (o->sexp->len < 2 || o->sexp->buffer[1]->tag != ATOM ||
+      ((o->sexp->len - 2) & 1) != 0) {
+    fail_at(o->beg, "%s needs a name and field name :type pairs, e.g. "
+                    "(%s Point x :int y :int)",
+            kind, kind);
+  }
+
+  ccode_mark_line(code, o);
+  ccode_printf_line(code, "%s %s {", kind, o->sexp->buffer[1]->atom->buffer);
+  for (size_t j = 2; j < o->sexp->len; j += 2) {
+    Obj *field = o->sexp->buffer[j];
+    Obj *type = o->sexp->buffer[j + 1];
+    if (field->tag != ATOM || type->tag != ATOM ||
+        type->atom->buffer[0] != ':') {
+      fail_at(field->beg, "%s fields must be name :type pairs", kind);
+    }
+
+    ccode_printf_line(code, "");
+    ccode_append_declarator(code, type->atom->buffer, field->atom->buffer);
+    ccode_append(code, ";");
+  }
+  ccode_printf_line(code, "};");
+}
+
+void transpile_enum(Obj *o, CCode *code) {
+  if (o->sexp->len < 2 || o->sexp->buffer[1]->tag != ATOM) {
+    fail_at(o->beg, "enum needs a name");
+  }
+
+  ccode_mark_line(code, o);
+  ccode_printf_line(code, "enum %s {", o->sexp->buffer[1]->atom->buffer);
+  for (size_t j = 2; j < o->sexp->len; j++) {
+    Obj *entry = o->sexp->buffer[j];
+    if (entry->tag == ATOM) {
+      ccode_printf_line(code, "%s,", entry->atom->buffer);
+    } else if (entry->sexp->len == 2 && entry->sexp->buffer[0]->tag == ATOM &&
+               entry->sexp->buffer[1]->tag == ATOM) {
+      ccode_printf_line(code, "%s = %s,", entry->sexp->buffer[0]->atom->buffer,
+                        entry->sexp->buffer[1]->atom->buffer);
+    } else {
+      fail_at(entry->beg, "enum entries are names or (name value) pairs");
+    }
+  }
+  ccode_printf_line(code, "};");
+}
+
+void transpile_typedef(Obj *o, CCode *code) {
+  if (o->sexp->len != 3 || o->sexp->buffer[1]->tag != ATOM ||
+      o->sexp->buffer[2]->tag != ATOM ||
+      o->sexp->buffer[2]->atom->buffer[0] != ':') {
+    fail_at(o->beg, "typedef needs a name and a :type, e.g. "
+                    "(typedef Point :struct-Point)");
+  }
+
+  ccode_mark_line(code, o);
+  ccode_printf_line(code, "typedef ");
+  ccode_append_declarator(code, o->sexp->buffer[2]->atom->buffer,
+                          o->sexp->buffer[1]->atom->buffer);
+  ccode_append(code, ";");
 }
 
 void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {

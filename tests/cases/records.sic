@@ -1,0 +1,27 @@
+(#include <stdio.h>)
+
+(struct Point x :int y :int)
+(typedef Point :struct-Point)
+
+(enum Color RED GREEN (BLUE 5))
+
+(union Word i :int c :char[4])
+
+(typedef Vec :int[3])
+
+(fn main :int (argc :int argv :char**)
+  (decl p :Point)
+  (set (. p x) 3)
+  (set (. p y) 4)
+  (printf "%d %d\n" (. p x) (. p y))
+
+  (decl pp :Point* (& p))
+  (printf "%d\n" (-> pp y))
+
+  (printf "%d %d %d\n" RED GREEN BLUE)
+  (printf "%zu\n" (sizeof :union-Word))
+
+  (decl v :Vec)
+  (set (aref v 2) 7)
+  (printf "%d\n" (aref v 2))
+  (return 0))
