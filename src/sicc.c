@@ -810,7 +810,6 @@ void transpile_statement(Obj *o, CCode *code) {
   transpile_obj(o, code, STATEMENT);
 }
 
-#ifndef TEST
 // === Main ===
 
 int main(int argc, char **argv) {
@@ -829,62 +828,3 @@ int main(int argc, char **argv) {
   fclose(fp);
   ccode_free(code);
 }
-
-#else
-// === Tests ===
-// Very coarse tests for now, will refactor later
-
-void test_src_file_reads() {
-  SrcFile *src = srcfile_init("examples/hello.sic");
-  while (true) {
-    int ch = srcfile_getc(src);
-    if (ch == EOF) {
-      break;
-    }
-
-    printf("%c", ch);
-  }
-  srcfile_free(src);
-}
-
-void test_list_management() {
-  List *list = list_init();
-
-  Obj *o = CHECK_ALLOC(calloc(2, sizeof(Obj *)));
-  for (int i = 0; i < list->len; i++) {
-    list_add(list, &o[i]);
-  }
-
-  for (int i = 0; i < list->len; i++) {
-    assert(list->buffer[i] == &o[i]);
-  }
-
-  list_resize(list, 10);
-  for (int i = 0; i < list->len; i++) {
-    assert(list->buffer[i] == &o[i]);
-  }
-
-  list_free(list);
-  free(o);
-}
-
-void test_transpile() {
-  Parser *parser = parser_init("examples/hello.sic");
-  parser_parse(parser);
-  parser_print(parser);
-  CCode *code = transpile(parser->list);
-  parser_free(parser);
-
-  printf("\n\n");
-  ccode_write(code, stdout);
-  ccode_free(code);
-}
-
-int main(int argc, char **argv) {
-  printf("=== Testing sicc! ===\n");
-  // test_src_file_reads();
-  // test_list_management();
-  test_transpile();
-}
-
-#endif

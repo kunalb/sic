@@ -3,3 +3,4 @@ sicc
 TAGS
 **/.#*
 build
+tests/out
