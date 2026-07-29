@@ -1204,8 +1204,8 @@ void transpile_statement(Obj *o, CCode *code) {
 // === Main ===
 
 int main(int argc, char **argv) {
-  if (argc < 3) {
-    fprintf(stderr, "Usage: %s <file to transpile> <output file>\n", argv[0]);
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <file to transpile> [output file]\n", argv[0]);
     exit(EXIT_FAILURE);
   }
 
@@ -1215,12 +1215,17 @@ int main(int argc, char **argv) {
   CCode *code = transpile(parser->list);
   parser_free(parser);
 
-  FILE *fp = fopen(argv[2], "w");
-  if (fp == NULL) {
-    fprintf(stderr, "error: Unable to open %s for writing.\n", argv[2]);
-    exit(EXIT_FAILURE);
+  FILE *fp = stdout;
+  if (argc >= 3) {
+    fp = fopen(argv[2], "w");
+    if (fp == NULL) {
+      fprintf(stderr, "error: Unable to open %s for writing.\n", argv[2]);
+      exit(EXIT_FAILURE);
+    }
   }
   ccode_write(code, fp);
-  fclose(fp);
+  if (fp != stdout) {
+    fclose(fp);
+  }
   ccode_free(code);
 }
