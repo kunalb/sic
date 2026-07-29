@@ -1008,11 +1008,24 @@ void transpile_fn(Obj *o, CCode *code) {
   free(ret);
 
   Obj *args = o->sexp->buffer[3];
-  if (args->tag != SEXP || (args->sexp->len & 1) != 0) {
+  if (args->tag != SEXP) {
     fail_at(o->sexp->buffer[3]->beg,
             "fn arguments must be name :type pairs, e.g. (argc :int)");
   }
-  for (size_t j = 0; j < args->sexp->len; j += 2) {
+
+  size_t nargs = args->sexp->len;
+  Obj *last = nargs > 0 ? args->sexp->buffer[nargs - 1] : NULL;
+  bool variadic =
+      last != NULL && last->tag == ATOM && strcmp(last->atom->buffer, "...") == 0;
+  if (variadic) {
+    nargs--;
+  }
+  if ((nargs & 1) != 0) {
+    fail_at(args->beg,
+            "fn arguments must be name :type pairs, e.g. (argc :int)");
+  }
+
+  for (size_t j = 0; j < nargs; j += 2) {
     Obj *arg_name = args->sexp->buffer[j];
     if (arg_name->tag != ATOM) {
       fail_at(arg_name->beg,
@@ -1024,6 +1037,10 @@ void transpile_fn(Obj *o, CCode *code) {
     }
     ccode_append_declarator_obj(code, args->sexp->buffer[j + 1],
                                 arg_name->atom->buffer);
+  }
+
+  if (variadic) {
+    ccode_append(code, "%s...", nargs > 0 ? ", " : "");
   }
 
   if (o->sexp->len == 4) {

@@ -1,0 +1,17 @@
+(#include <stdio.h> <stdarg.h>)
+
+(fn sum :int (n :int ...))     ; variadic prototype
+
+(fn sum :int (n :int ...)
+  (decl ap :va_list)
+  (va_start ap n)
+  (decl total :int 0)
+  (for (decl i :int 0) (< i n) (++ i)
+    (+= total (va_arg ap int)))
+  (va_end ap)
+  (return total))
+
+(fn main :int (argc :int argv :char**)
+  (printf "%d\n" (sum 3 10 20 30))
+  (printf "%d\n" (sum 0))
+  (return 0))
