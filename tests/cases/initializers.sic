@@ -1,0 +1,25 @@
+(#include <stdio.h>)
+
+(struct Point x :int y :int)
+
+(decl origin :struct-Point (init 0 0))
+
+(fn main :int (argc :int argv :char**)
+  (decl a :int[3] (init 1 2 3))
+  (decl b :int[] (init 4 5 6 7))
+  (printf "%d %d %zu\n" (aref a 1) (aref b 3) (/ (sizeof b) (sizeof :int)))
+
+  (decl p :struct-Point (init 7 8))
+  (decl q :struct-Point (init (.y 9)))
+  (printf "%d %d %d %d\n" (. p x) (. p y) (. q y) (. q x))
+
+  (decl m :int[2][2] (init (init 1 2) (init 3 4)))
+  (printf "%d\n" (aref m 1 0))
+
+  (decl zeroed :int[100] (init 0))
+  (printf "%d %d\n" (aref zeroed 0) (aref zeroed 99))
+
+  (set p (:struct-Point (init 40 2)))   ; compound literal
+  (printf "%d\n" (+ (. p x) (. p y)))
+  (printf "%d\n" (. origin x))
+  (return 0))

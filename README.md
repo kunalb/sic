@@ -52,6 +52,17 @@ spaces: `:int`, `:char**`, `:int[4]`, `:const-char*`, `:unsigned-long`,
 (++ x) (-- x)
 ```
 
+**Initializers**: `(init ...)` is a brace initializer; elements may be
+`(.field value)` designators, and nesting works for matrices and structs
+of structs. A cast around one makes a compound literal:
+
+```lisp
+(decl a :int[3] (init 1 2 3))
+(decl q :struct-Point (init (.y 9)))
+(decl m :int[2][2] (init (init 1 2) (init 3 4)))
+(set p (:struct-Point (init 40 2)))
+```
+
 **Operators** are n-ary and parenthesized: `+ - * / % < > <= >= == !=
 && || & | ^ << >>`, e.g. `(+ a b c)` is `(a + b + c)`. Two-element forms
 of `+ - * & ! ~` are prefix operators, so `(- x)` negates, `(& x)` takes

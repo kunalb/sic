@@ -131,6 +131,7 @@ void transpile_struct(Obj *o, CCode *code);
 void transpile_enum(Obj *o, CCode *code);
 void transpile_typedef(Obj *o, CCode *code);
 void transpile_switch(Obj *o, CCode *code);
+void transpile_init(Obj *o, CCode *code);
 void transpile_do_while(Obj *o, CCode *code);
 void transpile_goto(Obj *o, CCode *code);
 
@@ -672,6 +673,7 @@ static const TRule TRANSPILE_RULES[] = {
     {"^do$", transpile_do, STATEMENT},
     {"^\\?:$", transpile_ternary, EXPRESSION},
     {"^sizeof$", transpile_sizeof, EXPRESSION},
+    {"^init$", transpile_init, EXPRESSION},
     {"^switch$", transpile_switch, STATEMENT},
     {"^do-while$", transpile_do_while, STATEMENT},
     {"^(goto|label)$", transpile_goto, STATEMENT},
@@ -1016,6 +1018,27 @@ void transpile_ternary(Obj *o, CCode *code) {
   ccode_append(code, " : ");
   transpile_expression(o->sexp->buffer[3], code);
   ccode_append(code, ")");
+}
+
+void transpile_init(Obj *o, CCode *code) {
+  ccode_append(code, "{");
+  for (size_t i = 1; i < o->sexp->len; i++) {
+    if (i > 1) {
+      ccode_append(code, ", ");
+    }
+
+    Obj *e = o->sexp->buffer[i];
+    bool designated = e->tag == SEXP && e->sexp->len == 2 &&
+                      e->sexp->buffer[0]->tag == ATOM &&
+                      e->sexp->buffer[0]->atom->buffer[0] == '.';
+    if (designated) {
+      ccode_append(code, "%s = ", e->sexp->buffer[0]->atom->buffer);
+      transpile_expression(e->sexp->buffer[1], code);
+    } else {
+      transpile_expression(e, code);
+    }
+  }
+  ccode_append(code, "}");
 }
 
 void transpile_switch(Obj *o, CCode *code) {
