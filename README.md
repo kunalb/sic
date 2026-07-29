@@ -88,6 +88,17 @@ ternary is `(?: cond a b)`; `sizeof` takes a value or a type:
 (#include <stdio.h> "mylib.h")
 ```
 
+**Function pointers** are the type form `(fnptr :ret (:argtypes...))`,
+usable in `decl`, `typedef`, struct fields, and `fn` arguments:
+
+```lisp
+(decl cmp (fnptr :int (:const-void* :const-void*)) my_compare)
+(typedef BinOp (fnptr :int (:int :int)))
+```
+
+A call whose head is an expression calls through it: `((. op apply) 4 5)`
+is `((op).apply)(4, 5)`.
+
 ## Structure, conventions
 - (Haven't written enough C yet to have taste, making things up as I go)
 

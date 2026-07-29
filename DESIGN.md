@@ -32,9 +32,12 @@ mostly comment-free. Newest entries at the bottom of each section.
   illegal in C type names so the mapping can't collide; translation stops
   at `[` so array-size expressions like `x[N-1]` are left alone. Storage
   classes ride along for free (`:static-int`).
-- Function-pointer types can't be written yet — they need parentheses,
-  which the reader would split into a sexp. They'll likely become a
-  dedicated form (e.g. `(fnptr ret (args))`) once needed.
+- Function-pointer types are a structured form rather than an atom —
+  `(fnptr :ret (:argtypes...))` — because their C syntax needs
+  parentheses, which the reader always splits into a sexp. The form is
+  accepted anywhere a declarator is built (decl, typedef, struct fields,
+  fn arguments) but not in casts or sizeof, where a plain atom is still
+  required; add those when a real program needs them.
 - Generated code must compile warning-free: the test harness builds with
   -Wall -Werror.
 

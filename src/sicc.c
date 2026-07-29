@@ -615,6 +615,44 @@ void ccode_append_declarator(CCode *code, const char *type_atom,
   free(type);
 }
 
+// Like ccode_append_declarator, but the type may also be a
+// (fnptr :ret (:argtypes...)) form, emitted as "ret (*name)(args)".
+void ccode_append_declarator_obj(CCode *code, Obj *type, const char *name) {
+  if (type->tag == ATOM && type->atom->buffer[0] == ':') {
+    ccode_append_declarator(code, type->atom->buffer, name);
+    return;
+  }
+
+  if (type->tag == SEXP && type->sexp->len == 3 &&
+      type->sexp->buffer[0]->tag == ATOM &&
+      strcmp(type->sexp->buffer[0]->atom->buffer, "fnptr") == 0 &&
+      type->sexp->buffer[1]->tag == ATOM &&
+      type->sexp->buffer[1]->atom->buffer[0] == ':' &&
+      type->sexp->buffer[2]->tag == SEXP) {
+    char *ret = type_to_c(type->sexp->buffer[1]->atom->buffer);
+    ccode_append(code, "%s (*%s)(", ret, name);
+    free(ret);
+
+    List *args = type->sexp->buffer[2]->sexp;
+    if (args->len == 0) {
+      ccode_append(code, "void");
+    }
+    for (size_t i = 0; i < args->len; i++) {
+      Obj *arg = args->buffer[i];
+      if (arg->tag != ATOM || arg->atom->buffer[0] != ':') {
+        fail_at(arg->beg, "fnptr argument types must be :type atoms");
+      }
+      char *arg_type = type_to_c(arg->atom->buffer);
+      ccode_append(code, "%s%s", i == 0 ? "" : ", ", arg_type);
+      free(arg_type);
+    }
+    ccode_append(code, ")");
+    return;
+  }
+
+  fail_at(type->beg, "expected a :type or (fnptr :ret (:argtypes...))");
+}
+
 static const TRule TRANSPILE_RULES[] = {
     {"^#include$", transpile_include, STATEMENT},
     {"^fn$", transpile_fn, STATEMENT},
@@ -686,16 +724,14 @@ void transpile_incdec(Obj *o, CCode *code) {
 }
 
 void transpile_decl(Obj *o, CCode *code) {
-  if (o->sexp->len < 3 || o->sexp->buffer[1]->tag != ATOM ||
-      o->sexp->buffer[2]->tag != ATOM ||
-      o->sexp->buffer[2]->atom->buffer[0] != ':') {
+  if (o->sexp->len < 3 || o->sexp->buffer[1]->tag != ATOM) {
     fail_at(o->beg, "decl needs a name and a :type, e.g. (decl x :int)");
   }
 
   ccode_mark_line(code, o);
   ccode_printf_line(code, "");
-  ccode_append_declarator(code, o->sexp->buffer[2]->atom->buffer,
-                          o->sexp->buffer[1]->atom->buffer);
+  ccode_append_declarator_obj(code, o->sexp->buffer[2],
+                              o->sexp->buffer[1]->atom->buffer);
   if (o->sexp->len > 3) {
     ccode_append(code, " = ");
     transpile_expression(o->sexp->buffer[3], code);
@@ -842,7 +878,8 @@ void transpile_include(Obj *o, CCode *code) {
 }
 
 void transpile_call(Obj *o, CCode *code) {
-  ccode_append(code, "%s(", o->sexp->buffer[0]->atom->buffer);
+  transpile_postfix_base(o->sexp->buffer[0], code);
+  ccode_append(code, "(");
 
   for (size_t j = 1; j < o->sexp->len; j++) {
     if (j > 1) {
@@ -878,17 +915,16 @@ void transpile_fn(Obj *o, CCode *code) {
   }
   for (size_t j = 0; j < args->sexp->len; j += 2) {
     Obj *arg_name = args->sexp->buffer[j];
-    Obj *arg_type = args->sexp->buffer[j + 1];
-    if (arg_name->tag != ATOM || arg_type->tag != ATOM ||
-        arg_type->atom->buffer[0] != ':') {
+    if (arg_name->tag != ATOM) {
       fail_at(arg_name->beg,
               "fn arguments must be name :type pairs, e.g. (argc :int)");
     }
 
-    char *arg = type_to_c(arg_type->atom->buffer);
-    ccode_append(code, "%s%s %s", j == 0 ? "" : ", ", arg,
-                 arg_name->atom->buffer);
-    free(arg);
+    if (j > 0) {
+      ccode_append(code, ", ");
+    }
+    ccode_append_declarator_obj(code, args->sexp->buffer[j + 1],
+                                arg_name->atom->buffer);
   }
 
   if (o->sexp->len == 4) {
@@ -1070,14 +1106,13 @@ void transpile_struct(Obj *o, CCode *code) {
   ccode_printf_line(code, "%s %s {", kind, o->sexp->buffer[1]->atom->buffer);
   for (size_t j = 2; j < o->sexp->len; j += 2) {
     Obj *field = o->sexp->buffer[j];
-    Obj *type = o->sexp->buffer[j + 1];
-    if (field->tag != ATOM || type->tag != ATOM ||
-        type->atom->buffer[0] != ':') {
+    if (field->tag != ATOM) {
       fail_at(field->beg, "%s fields must be name :type pairs", kind);
     }
 
     ccode_printf_line(code, "");
-    ccode_append_declarator(code, type->atom->buffer, field->atom->buffer);
+    ccode_append_declarator_obj(code, o->sexp->buffer[j + 1],
+                                field->atom->buffer);
     ccode_append(code, ";");
   }
   ccode_printf_line(code, "};");
@@ -1106,17 +1141,15 @@ void transpile_enum(Obj *o, CCode *code) {
 }
 
 void transpile_typedef(Obj *o, CCode *code) {
-  if (o->sexp->len != 3 || o->sexp->buffer[1]->tag != ATOM ||
-      o->sexp->buffer[2]->tag != ATOM ||
-      o->sexp->buffer[2]->atom->buffer[0] != ':') {
+  if (o->sexp->len != 3 || o->sexp->buffer[1]->tag != ATOM) {
     fail_at(o->beg, "typedef needs a name and a :type, e.g. "
                     "(typedef Point :struct-Point)");
   }
 
   ccode_mark_line(code, o);
   ccode_printf_line(code, "typedef ");
-  ccode_append_declarator(code, o->sexp->buffer[2]->atom->buffer,
-                          o->sexp->buffer[1]->atom->buffer);
+  ccode_append_declarator_obj(code, o->sexp->buffer[2],
+                              o->sexp->buffer[1]->atom->buffer);
   ccode_append(code, ";");
 }
 
@@ -1147,8 +1180,16 @@ void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {
       fail_at(o->beg, "empty expression '()'");
     }
     if (o->sexp->buffer[0]->tag != ATOM) {
-      fail_at(o->sexp->buffer[0]->beg,
-              "operator position must hold a name, not an expression");
+      bool as_statement = ctx == STATEMENT;
+      if (as_statement) {
+        ccode_mark_line(code, o);
+        ccode_printf_line(code, "");
+      }
+      transpile_call(o, code);
+      if (as_statement) {
+        ccode_append(code, ";");
+      }
+      return;
     }
 
     char *head = o->sexp->buffer[0]->atom->buffer;

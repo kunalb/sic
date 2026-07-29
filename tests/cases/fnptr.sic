@@ -1,0 +1,30 @@
+(#include <stdio.h>)
+
+(fn add :int (a :int b :int) (return (+ a b)))
+(fn mul :int (a :int b :int) (return (* a b)))
+
+(typedef BinOp (fnptr :int (:int :int)))
+(struct Op name :const-char* apply (fnptr :int (:int :int)))
+
+(fn pick :BinOp (which :int)
+  (return (?: which add mul)))
+
+(fn apply_twice :int (f (fnptr :int (:int :int)) x :int)
+  (return (f (f x x) (f x x))))
+
+(fn main :int (argc :int argv :char**)
+  (decl f (fnptr :int (:int :int)) add)
+  (printf "%d\n" (f 2 3))
+  (set f mul)
+  (printf "%d\n" (f 2 3))
+
+  (decl g :BinOp add)
+  (printf "%d\n" (g 10 5))
+
+  (decl op :struct-Op)
+  (set (. op apply) mul)
+  (printf "%d\n" ((. op apply) 4 5))
+
+  (printf "%d\n" ((pick 1) 6 7))
+  (printf "%d\n" (apply_twice add 3))
+  (return 0))
