@@ -1,0 +1,26 @@
+(#include <stdio.h>)
+
+(#define MAX 3)
+(#define (SQR x) (* x x))
+(#define VERBOSE)
+(#define BIG (* 4 1024))
+
+(fn main :int (argc :int argv :char**)
+  (decl total :int 0)
+  (for (decl i :int 0) (< i MAX) (++ i)
+    (+= total (SQR (+ i 1))))
+  (printf "%d\n" total)
+  (printf "%d\n" BIG)
+
+  (#ifdef VERBOSE
+    (printf "verbose\n")
+    (#else)
+    (printf "quiet\n"))
+
+  (#undef VERBOSE)
+  (#ifndef VERBOSE
+    (printf "undefined now\n"))
+
+  (#if (>= MAX 3)
+    (printf "big enough\n"))
+  (return 0))

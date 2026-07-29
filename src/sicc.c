@@ -132,6 +132,11 @@ void transpile_enum(Obj *o, CCode *code);
 void transpile_typedef(Obj *o, CCode *code);
 void transpile_switch(Obj *o, CCode *code);
 void transpile_init(Obj *o, CCode *code);
+void transpile_define(Obj *o, CCode *code);
+void transpile_undef(Obj *o, CCode *code);
+void transpile_guard(Obj *o, CCode *code);
+void transpile_hash_else(Obj *o, CCode *code);
+void transpile_pragma(Obj *o, CCode *code);
 void transpile_do_while(Obj *o, CCode *code);
 void transpile_goto(Obj *o, CCode *code);
 
@@ -656,6 +661,11 @@ void ccode_append_declarator_obj(CCode *code, Obj *type, const char *name) {
 
 static const TRule TRANSPILE_RULES[] = {
     {"^#include$", transpile_include, STATEMENT},
+    {"^#define$", transpile_define, STATEMENT},
+    {"^#undef$", transpile_undef, STATEMENT},
+    {"^#(ifdef|ifndef|if)$", transpile_guard, STATEMENT},
+    {"^#else$", transpile_hash_else, STATEMENT},
+    {"^#pragma$", transpile_pragma, STATEMENT},
     {"^fn$", transpile_fn, STATEMENT},
     {"^return$", transpile_return, STATEMENT},
     {"^([-+*/%&|^]=|<<=|>>=)$", transpile_op_assign, STATEMENT},
@@ -876,6 +886,93 @@ void transpile_include(Obj *o, CCode *code) {
 
     ccode_mark_line(code, t);
     ccode_printf_line(code, "#include %s", t->atom->buffer);
+  }
+}
+
+void transpile_define(Obj *o, CCode *code) {
+  if (o->sexp->len < 2 || o->sexp->len > 3) {
+    fail_at(o->beg, "#define needs a name or (name params...), and an "
+                    "optional value");
+  }
+
+  ccode_mark_line(code, o);
+  Obj *name = o->sexp->buffer[1];
+  if (name->tag == ATOM) {
+    ccode_printf_line(code, "#define %s", name->atom->buffer);
+  } else {
+    if (name->sexp->len < 2) {
+      fail_at(name->beg, "a function-like #define needs a name and at "
+                         "least one parameter");
+    }
+    for (size_t i = 0; i < name->sexp->len; i++) {
+      if (name->sexp->buffer[i]->tag != ATOM) {
+        fail_at(name->sexp->buffer[i]->beg,
+                "#define names and parameters must be plain atoms");
+      }
+    }
+
+    ccode_printf_line(code, "#define %s(", name->sexp->buffer[0]->atom->buffer);
+    for (size_t i = 1; i < name->sexp->len; i++) {
+      ccode_append(code, "%s%s", i == 1 ? "" : ", ",
+                   name->sexp->buffer[i]->atom->buffer);
+    }
+    ccode_append(code, ")");
+  }
+
+  if (o->sexp->len == 3) {
+    ccode_append(code, " ");
+    transpile_expression(o->sexp->buffer[2], code);
+  }
+}
+
+void transpile_undef(Obj *o, CCode *code) {
+  if (o->sexp->len != 2 || o->sexp->buffer[1]->tag != ATOM) {
+    fail_at(o->beg, "#undef needs a name");
+  }
+
+  ccode_mark_line(code, o);
+  ccode_printf_line(code, "#undef %s", o->sexp->buffer[1]->atom->buffer);
+}
+
+void transpile_guard(Obj *o, CCode *code) {
+  char *head = o->sexp->buffer[0]->atom->buffer;
+  if (o->sexp->len < 2) {
+    fail_at(o->beg, "%s needs a condition", head);
+  }
+
+  ccode_mark_line(code, o);
+  if (strcmp(head, "#if") == 0) {
+    ccode_printf_line(code, "#if ");
+    transpile_expression(o->sexp->buffer[1], code);
+  } else {
+    if (o->sexp->buffer[1]->tag != ATOM) {
+      fail_at(o->sexp->buffer[1]->beg, "%s takes a plain name", head);
+    }
+    ccode_printf_line(code, "%s %s", head, o->sexp->buffer[1]->atom->buffer);
+  }
+
+  for (size_t i = 2; i < o->sexp->len; i++) {
+    transpile_statement(o->sexp->buffer[i], code);
+  }
+  ccode_printf_line(code, "#endif");
+}
+
+void transpile_hash_else(Obj *o, CCode *code) {
+  if (o->sexp->len != 1) {
+    fail_at(o->beg, "(#else) takes no arguments; place statements after it");
+  }
+
+  ccode_printf_line(code, "#else");
+}
+
+void transpile_pragma(Obj *o, CCode *code) {
+  ccode_mark_line(code, o);
+  ccode_printf_line(code, "#pragma");
+  for (size_t i = 1; i < o->sexp->len; i++) {
+    if (o->sexp->buffer[i]->tag != ATOM) {
+      fail_at(o->sexp->buffer[i]->beg, "#pragma takes plain atoms");
+    }
+    ccode_append(code, " %s", o->sexp->buffer[i]->atom->buffer);
   }
 }
 

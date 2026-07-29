@@ -41,6 +41,19 @@ mostly comment-free. Newest entries at the bottom of each section.
 - Generated code must compile warning-free: the test harness builds with
   -Wall -Werror.
 
+## Preprocessor
+
+- `#ifdef` / `#ifndef` / `#if` are wrapping forms — the body lives inside
+  the sexp and `#endif` is emitted automatically, so guards can't be left
+  unbalanced. `(#else)` is a marker placed between the two halves of the
+  body. `#define` exists in object-like and function-like shapes.
+- Macro hygiene rides on expression emission: composite call-site
+  arguments are already parenthesized (`(SQR (+ i 1))` → `SQR((i + 1))`),
+  and operator bodies parenthesize themselves, so the classic
+  unparenthesized-argument bugs mostly can't happen. Macro *parameters*
+  inside bodies are not auto-wrapped, though — a body that juxtaposes a
+  parameter with higher-precedence syntax by hand can still misbind.
+
 ## Diagnostics
 
 - Malformed input produces `file:row:col: error: message` and exits

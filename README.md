@@ -99,6 +99,18 @@ ternary is `(?: cond a b)`; `sizeof` takes a value or a type:
 (#include <stdio.h> "mylib.h")
 ```
 
+**Preprocessor**
+
+```lisp
+(#define MAX 3)
+(#define (SQR x) (* x x))          ; function-like macro
+(#undef MAX)
+(#ifdef VERBOSE stmt... (#else) stmt...)   ; #endif is implicit
+(#ifndef GUARD stmt...)
+(#if (>= MAX 3) stmt...)
+(#pragma omp parallel for)
+```
+
 **Function pointers** are the type form `(fnptr :ret (:argtypes...))`,
 usable in `decl`, `typedef`, struct fields, and `fn` arguments:
 
