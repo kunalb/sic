@@ -14,6 +14,16 @@ mostly comment-free. Newest entries at the bottom of each section.
 - `examples/` doubles as the showcase and the integration suite;
   `tests/cases/` holds small programs that each exercise one language form.
 
+## Transpiler rules
+
+- Every form is either an expression or a statement, declared on its rule.
+  The first rule whose regex matches the head atom decides what the form
+  *is*; context is then checked, not used for dispatch. Expressions coerce
+  to statements (a `;` is appended); a statement in expression position is
+  an error. This keeps dispatch predictable — a head never means two
+  different things depending on where it appears — so the ternary gets its
+  own head (`?:`) instead of overloading `if`.
+
 ## Diagnostics
 
 - Malformed input produces `file:row:col: error: message` and exits

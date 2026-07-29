@@ -1,0 +1,3 @@
+(fn main :int (argc :int argv :char**)
+  (decl x :int (while 1 (foo)))
+  (return 0))

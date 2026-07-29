@@ -95,8 +95,8 @@ struct Parser {
 };
 
 typedef enum RuleContext {
-  EXPRESSION = 1,
-  STATEMENT = 3,
+  EXPRESSION = 1 << 0,
+  STATEMENT = 1 << 1,
 } RuleContext;
 
 typedef struct TRule {
@@ -838,32 +838,33 @@ void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {
               "operator position must hold a name, not an expression");
     }
 
+    char *head = o->sexp->buffer[0]->atom->buffer;
     for (size_t i = 0; i < TRANSPILE_RULE_LEN; i++) {
-      if ((ctx & TRANSPILE_RULES[i].ctx) == 0) {
+      int result = regexec(&TRANSPILE_REGEXES[i], head, 0, NULL, 0);
+      if (result == REG_NOMATCH) {
         continue;
       }
 
-      int result = regexec(&TRANSPILE_REGEXES[i],
-                           o->sexp->buffer[0]->atom->buffer, 0, NULL, 0);
-      if (result != REG_NOMATCH) {
-        bool as_statement =
-            ctx == STATEMENT && TRANSPILE_RULES[i].ctx == EXPRESSION;
-        if (as_statement) {
-          ccode_mark_line(code, o);
-          ccode_printf_line(code, "");
-        }
-
-        TRANSPILE_RULES[i].fn(o, code);
-
-        if (as_statement) {
-          ccode_append(code, ";");
-        }
-        return;
+      if (ctx == EXPRESSION && (TRANSPILE_RULES[i].ctx & EXPRESSION) == 0) {
+        fail_at(o->beg, "'%s' is a statement and has no value here", head);
       }
+
+      bool as_statement =
+          ctx == STATEMENT && (TRANSPILE_RULES[i].ctx & STATEMENT) == 0;
+      if (as_statement) {
+        ccode_mark_line(code, o);
+        ccode_printf_line(code, "");
+      }
+
+      TRANSPILE_RULES[i].fn(o, code);
+
+      if (as_statement) {
+        ccode_append(code, ";");
+      }
+      return;
     }
 
-    fail_at(o->beg, "no rule matches '%s' here",
-            o->sexp->buffer[0]->atom->buffer);
+    fail_at(o->beg, "no rule matches '%s' here", head);
   } else {
     if (ctx == STATEMENT) {
       ccode_mark_line(code, o);
