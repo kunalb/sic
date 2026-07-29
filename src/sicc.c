@@ -285,7 +285,7 @@ void list_add(List *list, Obj *obj) {
 }
 
 void list_free(List *l) {
-  for (int i = 0; i < l->len; i++) {
+  for (size_t i = 0; i < l->len; i++) {
     obj_free(l->buffer[i]);
   }
   free(l->buffer);
@@ -293,6 +293,10 @@ void list_free(List *l) {
 }
 
 void list_print(List *l, size_t indent) {
+  if (l->len == 0) {
+    return;
+  }
+
   size_t num_width = 1 + (size_t)log10(l->len);
   char formatstr[100];
   snprintf(formatstr, 100, "%%%zus%%%zuzu: %%s [%%zu, %%zu] -> [%%zu, %%zu]\n",
@@ -371,9 +375,11 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
           (atom->buffer[0] == '"' || atom->buffer[0] == '\'')) {
         if (ch == atom->buffer[0]) {
           size_t escapes = 0;
-          size_t idx = atom->len - 1;
-          while (atom->buffer[idx--] == '\\' && idx >= 0)
+          size_t idx = atom->len;
+          while (idx > 1 && atom->buffer[idx - 1] == '\\') {
             escapes++;
+            idx--;
+          }
           if ((escapes & 1) == 0) {
             atom_add(atom, srcfile_getc(parser->srcfile));
             finished = true;
@@ -419,7 +425,7 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
     }
   }
 
-  assert(srcfile_getc(parser->srcfile) == EOF);
+  srcfile_getc(parser->srcfile);
 }
 
 void parser_parse(Parser *parser) {
@@ -505,7 +511,7 @@ char *ccode_printf_line(CCode *code, const char *format, ...) {
 
 void ccode_mark_line(CCode *code, Obj *o) {
 #ifndef DISABLE_LINE
-  ccode_printf_line(code, "#line %d", o->beg.row + 1);
+  ccode_printf_line(code, "#line %zu", o->beg.row + 1);
 #endif
 }
 
@@ -630,7 +636,7 @@ void transpile_op_assign(Obj *o, CCode *code) {
   ccode_printf_line(code, "%s %s (", o->sexp->buffer[1]->atom->buffer,
                     o->sexp->buffer[0]->atom->buffer);
   transpile_expression(o->sexp->buffer[2], code);
-  ccode_printf_line(code, ");", o->sexp->buffer[1]);
+  ccode_printf_line(code, ");");
 };
 
 void transpile_deref(Obj *o, CCode *code) {
@@ -762,16 +768,14 @@ void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {
 
   if (o->tag == SEXP) {
     assert(o->sexp->len > 0);
-    bool matched = false;
     for (size_t i = 0; i < TRANSPILE_RULE_LEN; i++) {
       if ((ctx & TRANSPILE_RULES[i].ctx) == 0) {
         continue;
       }
 
       int result = regexec(&TRANSPILE_REGEXES[i],
-                           o->sexp->buffer[0]->atom->buffer, i, NULL, 0);
+                           o->sexp->buffer[0]->atom->buffer, 0, NULL, 0);
       if (result != REG_NOMATCH) {
-        matched = true;
         TRANSPILE_RULES[i].fn(o, code);
 
         if (TRANSPILE_RULES[i].ctx != ctx) {
@@ -780,11 +784,6 @@ void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {
         break;
       }
     }
-
-#ifdef DEBUG
-    if (!matched)
-      printf("Rule: No matches found! %s\n", o->sexp->buffer[0]->atom->buffer);
-#endif
   } else {
     assert(o->tag == ATOM);
     ccode_printf_line(code, "%s%s", o->atom->buffer,
@@ -813,8 +812,8 @@ void transpile_statement(Obj *o, CCode *code) {
 // === Main ===
 
 int main(int argc, char **argv) {
-  if (argc < 2) {
-    fprintf(stderr, "Usage: %s <file to transpile> <output file>", argv[0]);
+  if (argc < 3) {
+    fprintf(stderr, "Usage: %s <file to transpile> <output file>\n", argv[0]);
     exit(EXIT_FAILURE);
   }
 
@@ -824,6 +823,10 @@ int main(int argc, char **argv) {
   parser_free(parser);
 
   FILE *fp = fopen(argv[2], "w");
+  if (fp == NULL) {
+    fprintf(stderr, "error: Unable to open %s for writing.\n", argv[2]);
+    exit(EXIT_FAILURE);
+  }
   ccode_write(code, fp);
   fclose(fp);
   ccode_free(code);

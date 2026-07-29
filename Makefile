@@ -1,5 +1,5 @@
 CC ?= cc
-CFLAGS ?= -Wall -g
+CFLAGS ?= -Wall -Wextra -g
 
 sicc: src/sicc.c
 	$(CC) $(CFLAGS) -o $@ $< -lm
