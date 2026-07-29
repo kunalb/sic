@@ -18,6 +18,74 @@
 - examples: different projects built in sicc to test out the language
 
 
+## Getting started
+
+```sh
+make                                  # builds ./sicc
+make test                             # golden tests over examples/ and tests/
+./sicc examples/hello.sic hello.c && cc -o hello hello.c && ./hello
+```
+
+`sicc` writes the generated C to stdout when no output file is given.
+Design decisions and their rationale live in `DESIGN.md`.
+
+## Language reference
+
+A program is a sequence of forms. Atoms — numbers, strings, characters,
+identifiers — pass straight through as C tokens (so `a[i]` and `NULL` work
+as-is), and a form with an unrecognized head is a function call:
+`(printf "%d\n" x)`. A `;` starts a comment that runs to end of line.
+
+**Types** are atoms starting with `:`, with hyphens standing in for
+spaces: `:int`, `:char**`, `:int[4]`, `:const-char*`, `:unsigned-long`,
+`:struct-Point*`. A type applied to a value is a cast: `(:double x)`.
+
+**Declarations and assignment**
+
+```lisp
+(decl x :int)                 ; int x;
+(decl x :int 42)              ; int x = 42;
+(set place value)             ; place = value; place is any lvalue:
+(set (aref a i) 0)            ;   a[i] = 0;
+(set (-> node next) NULL)     ;   node->next = NULL;
+(+= x 1)                      ; also -= *= /= %= &= |= ^= <<= >>=
+(++ x) (-- x)
+```
+
+**Operators** are n-ary and parenthesized: `+ - * / % < > <= >= == !=
+&& || & | ^ << >>`, e.g. `(+ a b c)` is `(a + b + c)`. Two-element forms
+of `+ - * & ! ~` are prefix operators, so `(- x)` negates, `(& x)` takes
+an address, and `(* p)` dereferences (`(deref p)` also works). The
+ternary is `(?: cond a b)`; `sizeof` takes a value or a type:
+`(sizeof x)`, `(sizeof :unsigned-char)`.
+
+**Access**: `(aref a i j)` indexes (chainable), `(-> p field)` and
+`(. s field)` reach into structs and also chain: `(-> a b c)` is
+`a->b->c`.
+
+**Control flow**
+
+```lisp
+(if cond then-stmt else-stmt)    ; else optional; (do ...) groups statements
+(while cond stmt...)
+(do-while cond stmt...)
+(for (decl i :int 0) (< i n) (++ i) stmt...)
+(switch v (case 1 stmt... break) (default stmt...))  ; C fallthrough, explicit break
+(goto out) (label out)
+(return x) (return)              ; break and continue are bare atoms
+```
+
+**Functions and records**
+
+```lisp
+(fn main :int (argc :int argv :char**) stmt...)
+(struct Point x :int y :int)
+(union Word i :int c :char[4])
+(enum Color RED GREEN (BLUE 5))
+(typedef Point :struct-Point)
+(#include <stdio.h> "mylib.h")
+```
+
 ## Structure, conventions
 - (Haven't written enough C yet to have taste, making things up as I go)
 
