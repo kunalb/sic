@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include <assert.h>
 #include <ctype.h>
 #include <math.h>
 #include <regex.h>
@@ -148,6 +147,19 @@ void transpile_for(Obj *o, CCode *code);
             ##__VA_ARGS__);                                                    \
     fflush(stderr);                                                            \
   } while (0)
+
+static const char *sic_srcname = "<input>";
+
+_Noreturn static void fail_at(Pos pos, const char *fmt, ...) {
+  fprintf(stderr, "%s:%zu:%zu: error: ", sic_srcname, pos.row + 1,
+          pos.col + 1);
+  va_list args;
+  va_start(args, fmt);
+  vfprintf(stderr, fmt, args);
+  va_end(args);
+  fprintf(stderr, "\n");
+  exit(EXIT_FAILURE);
+}
 
 // ==== Source files ====
 
@@ -359,7 +371,7 @@ void atom_print(Atom *a) {
 
 // ==== Parser ====
 
-void parser_next(Parser *parser, List *container, Atom *atom) {
+void parser_next(Parser *parser, List *container, Atom *atom, Obj *parent) {
   int ch;
 
   while ((ch = srcfile_peek(parser->srcfile)) != EOF) {
@@ -409,7 +421,9 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
       }
 
       if (ch == ')') {
-        assert(container != NULL);
+        if (parent == NULL) {
+          fail_at(parser->srcfile->pos, "unmatched ')'");
+        }
         srcfile_getc(parser->srcfile);
         return;
       }
@@ -419,7 +433,7 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
         o->beg = parser->srcfile->pos;
         list_add(container, o);
         srcfile_getc(parser->srcfile);
-        parser_next(parser, o->sexp, NULL);
+        parser_next(parser, o->sexp, NULL, o);
         o->end = parser->srcfile->pos;
         continue;
       }
@@ -427,9 +441,19 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
       o = obj_init(ATOM);
       o->beg = parser->srcfile->pos;
       list_add(container, o);
-      parser_next(parser, container, o->atom);
+      parser_next(parser, container, o->atom, parent);
       o->end = parser->srcfile->pos;
     }
+  }
+
+  if (atom != NULL) {
+    if (atom->len > 0 && (atom->buffer[0] == '"' || atom->buffer[0] == '\'')) {
+      fail_at(parser->srcfile->pos, "unterminated %s literal",
+              atom->buffer[0] == '"' ? "string" : "character");
+    }
+    atom_add(atom, '\0');
+  } else if (parent != NULL) {
+    fail_at(parent->beg, "unclosed '('");
   }
 
   srcfile_getc(parser->srcfile);
@@ -441,7 +465,7 @@ void parser_parse(Parser *parser) {
     exit(EXIT_FAILURE);
   }
 
-  parser_next(parser, parser->list, NULL);
+  parser_next(parser, parser->list, NULL, NULL);
 }
 
 void parser_print(Parser *parser) {
@@ -518,7 +542,7 @@ char *ccode_printf_line(CCode *code, const char *format, ...) {
 
 void ccode_mark_line(CCode *code, Obj *o) {
 #ifndef DISABLE_LINE
-  ccode_printf_line(code, "#line %zu", o->beg.row + 1);
+  ccode_printf_line(code, "#line %zu \"%s\"", o->beg.row + 1, sic_srcname);
 #endif
 }
 
@@ -548,9 +572,10 @@ static const TRule TRANSPILE_RULES[] = {
 #define TRANSPILE_RULE_LEN (sizeof(TRANSPILE_RULES) / sizeof(TRule))
 
 void transpile_binary_op(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len >= 3);
-  assert(o->sexp->buffer[0]->tag == ATOM);
+  if (o->sexp->len < 3) {
+    fail_at(o->beg, "operator '%s' needs at least two operands",
+            o->sexp->buffer[0]->atom->buffer);
+  }
 
   ccode_mark_line(code, o);
   ccode_printf_line(code, "(");
@@ -564,10 +589,11 @@ void transpile_binary_op(Obj *o, CCode *code) {
 }
 
 void transpile_decl(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len >= 3);
-  assert(o->sexp->buffer[1]->tag == ATOM);
-  assert(o->sexp->buffer[2]->tag == ATOM);
+  if (o->sexp->len < 3 || o->sexp->buffer[1]->tag != ATOM ||
+      o->sexp->buffer[2]->tag != ATOM ||
+      o->sexp->buffer[2]->atom->buffer[0] != ':') {
+    fail_at(o->beg, "decl needs a name and a :type, e.g. (decl x :int)");
+  }
 
   ccode_mark_line(code, o);
 
@@ -600,9 +626,9 @@ void transpile_decl(Obj *o, CCode *code) {
 }
 
 void transpile_set(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len == 3);
-  assert(o->sexp->buffer[1]->tag == ATOM);
+  if (o->sexp->len != 3 || o->sexp->buffer[1]->tag != ATOM) {
+    fail_at(o->beg, "set needs a name and a value, e.g. (set x 1)");
+  }
 
   ccode_mark_line(code, o);
   ccode_printf_line(code, "%s = (", o->sexp->buffer[1]->atom->buffer);
@@ -611,8 +637,9 @@ void transpile_set(Obj *o, CCode *code) {
 };
 
 void transpile_while(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len >= 2);
+  if (o->sexp->len < 2) {
+    fail_at(o->beg, "while needs a condition");
+  }
 
   ccode_mark_line(code, o);
   ccode_printf_line(code, "while (");
@@ -625,8 +652,9 @@ void transpile_while(Obj *o, CCode *code) {
 };
 
 void transpile_cast(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len == 2);
+  if (o->sexp->len != 2) {
+    fail_at(o->beg, "a cast takes exactly one value, e.g. (:int x)");
+  }
 
   ccode_mark_line(code, o);
   ccode_printf_line(code, "((%s)", o->sexp->buffer[0]->atom->buffer + 1);
@@ -635,9 +663,10 @@ void transpile_cast(Obj *o, CCode *code) {
 };
 
 void transpile_op_assign(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len >= 3);
-  assert(o->sexp->buffer[1]->tag == ATOM);
+  if (o->sexp->len != 3 || o->sexp->buffer[1]->tag != ATOM) {
+    fail_at(o->beg, "'%s' needs a name and a value, e.g. (%s x 1)",
+            o->sexp->buffer[0]->atom->buffer, o->sexp->buffer[0]->atom->buffer);
+  }
 
   ccode_mark_line(code, o);
   ccode_printf_line(code, "%s %s (", o->sexp->buffer[1]->atom->buffer,
@@ -647,8 +676,9 @@ void transpile_op_assign(Obj *o, CCode *code) {
 };
 
 void transpile_deref(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len == 2);
+  if (o->sexp->len != 2) {
+    fail_at(o->beg, "deref takes exactly one value");
+  }
 
   ccode_mark_line(code, o);
   ccode_printf_line(code, "*(");
@@ -657,8 +687,9 @@ void transpile_deref(Obj *o, CCode *code) {
 }
 
 void transpile_return(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len == 2);
+  if (o->sexp->len != 2) {
+    fail_at(o->beg, "return takes exactly one value");
+  }
 
   Obj *t = o->sexp->buffer[1];
   ccode_mark_line(code, t);
@@ -672,13 +703,15 @@ void transpile_return(Obj *o, CCode *code) {
 }
 
 void transpile_include(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len > 1);
+  if (o->sexp->len < 2) {
+    fail_at(o->beg, "#include needs at least one header");
+  }
 
   for (size_t i = 1; i < o->sexp->len; i++) {
     Obj *t = o->sexp->buffer[i];
-    // Will need to be extended to evaluate statically
-    assert(t->tag == ATOM);
+    if (t->tag != ATOM) {
+      fail_at(t->beg, "#include takes header names, not expressions");
+    }
 
     ccode_mark_line(code, t);
     ccode_printf_line(code, "#include %s", t->atom->buffer);
@@ -686,11 +719,6 @@ void transpile_include(Obj *o, CCode *code) {
 }
 
 void transpile_call(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len > 0);
-
-  assert(o->sexp->buffer[0]->tag == ATOM);
-
   ccode_mark_line(code, o);
   ccode_printf_line(code, "%s(", o->sexp->buffer[0]->atom->buffer);
 
@@ -705,23 +733,34 @@ void transpile_call(Obj *o, CCode *code) {
 }
 
 void transpile_fn(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len >= 5);
+  if (o->sexp->len < 5 || o->sexp->buffer[1]->tag != ATOM ||
+      o->sexp->buffer[2]->tag != ATOM ||
+      o->sexp->buffer[2]->atom->buffer[0] != ':') {
+    fail_at(o->beg,
+            "fn needs a name, a :type, an argument list, and a body, "
+            "e.g. (fn main :int (argc :int argv :char**) ...)");
+  }
 
   Obj *name = o->sexp->buffer[1];
   Obj *type = o->sexp->buffer[2];
-  assert(type->atom->buffer[0] == ':');
 
   ccode_mark_line(code, name);
   ccode_printf_line(code, "%s %s (", type->atom->buffer + 1,
                     name->atom->buffer);
 
   Obj *args = o->sexp->buffer[3];
-  assert(args->tag == SEXP);
+  if (args->tag != SEXP || (args->sexp->len & 1) != 0) {
+    fail_at(o->sexp->buffer[3]->beg,
+            "fn arguments must be name :type pairs, e.g. (argc :int)");
+  }
   for (size_t j = 0; j < args->sexp->len; j += 2) {
     Obj *arg_name = args->sexp->buffer[j];
     Obj *arg_type = args->sexp->buffer[j + 1];
-    assert(arg_type->atom->buffer[0] == ':');
+    if (arg_name->tag != ATOM || arg_type->tag != ATOM ||
+        arg_type->atom->buffer[0] != ':') {
+      fail_at(arg_name->beg,
+              "fn arguments must be name :type pairs, e.g. (argc :int)");
+    }
 
     ccode_mark_line(code, arg_name);
     ccode_printf_line(code, "  %s %s%s", arg_type->atom->buffer + 1,
@@ -739,8 +778,9 @@ void transpile_fn(Obj *o, CCode *code) {
 }
 
 void transpile_for(Obj *o, CCode *code) {
-  assert(o->tag == SEXP);
-  assert(o->sexp->len >= 4);
+  if (o->sexp->len < 4) {
+    fail_at(o->beg, "for needs an init statement, a condition, and a step");
+  }
 
   ccode_mark_line(code, o);
   ccode_printf_line(code, "for (");
@@ -767,14 +807,25 @@ void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {
 #ifdef DEBUG
       printf("REGEX: %s\n", TRANSPILE_RULES[i].match);
 #endif
-      assert(regcomp(&TRANSPILE_REGEXES[i], TRANSPILE_RULES[i].match,
-                     REG_EXTENDED | REG_NOSUB) == 0);
+      if (regcomp(&TRANSPILE_REGEXES[i], TRANSPILE_RULES[i].match,
+                  REG_EXTENDED | REG_NOSUB) != 0) {
+        fprintf(stderr, "internal error: bad rule regex '%s'\n",
+                TRANSPILE_RULES[i].match);
+        exit(EXIT_FAILURE);
+      }
     }
     initialized = true;
   }
 
   if (o->tag == SEXP) {
-    assert(o->sexp->len > 0);
+    if (o->sexp->len == 0) {
+      fail_at(o->beg, "empty expression '()'");
+    }
+    if (o->sexp->buffer[0]->tag != ATOM) {
+      fail_at(o->sexp->buffer[0]->beg,
+              "operator position must hold a name, not an expression");
+    }
+
     for (size_t i = 0; i < TRANSPILE_RULE_LEN; i++) {
       if ((ctx & TRANSPILE_RULES[i].ctx) == 0) {
         continue;
@@ -788,11 +839,13 @@ void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {
         if (TRANSPILE_RULES[i].ctx != ctx) {
           ccode_printf_line(code, ";");
         }
-        break;
+        return;
       }
     }
+
+    fail_at(o->beg, "no rule matches '%s' here",
+            o->sexp->buffer[0]->atom->buffer);
   } else {
-    assert(o->tag == ATOM);
     ccode_printf_line(code, "%s%s", o->atom->buffer,
                       ctx == STATEMENT ? ";" : "");
   }
@@ -824,6 +877,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
+  sic_srcname = argv[1];
   Parser *parser = parser_init(argv[1]);
   parser_parse(parser);
   CCode *code = transpile(parser->list);
