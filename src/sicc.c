@@ -130,6 +130,9 @@ void transpile_sizeof(Obj *o, CCode *code);
 void transpile_struct(Obj *o, CCode *code);
 void transpile_enum(Obj *o, CCode *code);
 void transpile_typedef(Obj *o, CCode *code);
+void transpile_switch(Obj *o, CCode *code);
+void transpile_do_while(Obj *o, CCode *code);
+void transpile_goto(Obj *o, CCode *code);
 
 // === Implementations ===
 
@@ -631,6 +634,9 @@ static const TRule TRANSPILE_RULES[] = {
     {"^do$", transpile_do, STATEMENT},
     {"^\\?:$", transpile_ternary, EXPRESSION},
     {"^sizeof$", transpile_sizeof, EXPRESSION},
+    {"^switch$", transpile_switch, STATEMENT},
+    {"^do-while$", transpile_do_while, STATEMENT},
+    {"^(goto|label)$", transpile_goto, STATEMENT},
     {"^(struct|union)$", transpile_struct, STATEMENT},
     {"^enum$", transpile_enum, STATEMENT},
     {"^typedef$", transpile_typedef, STATEMENT},
@@ -963,6 +969,81 @@ void transpile_ternary(Obj *o, CCode *code) {
   ccode_append(code, " : ");
   transpile_expression(o->sexp->buffer[3], code);
   ccode_append(code, ")");
+}
+
+void transpile_switch(Obj *o, CCode *code) {
+  if (o->sexp->len < 2) {
+    fail_at(o->beg, "switch needs a value");
+  }
+
+  ccode_mark_line(code, o);
+  ccode_printf_line(code, "switch (");
+  transpile_expression(o->sexp->buffer[1], code);
+  ccode_append(code, ") {");
+
+  for (size_t j = 2; j < o->sexp->len; j++) {
+    Obj *entry = o->sexp->buffer[j];
+    if (entry->tag != SEXP || entry->sexp->len == 0 ||
+        entry->sexp->buffer[0]->tag != ATOM) {
+      fail_at(entry->beg,
+              "switch entries are (case value ...) or (default ...)");
+    }
+
+    char *head = entry->sexp->buffer[0]->atom->buffer;
+    size_t body;
+    ccode_mark_line(code, entry);
+    if (strcmp(head, "case") == 0) {
+      if (entry->sexp->len < 2) {
+        fail_at(entry->beg, "case needs a value");
+      }
+      ccode_printf_line(code, "case ");
+      transpile_expression(entry->sexp->buffer[1], code);
+      ccode_append(code, ": {");
+      body = 2;
+    } else if (strcmp(head, "default") == 0) {
+      ccode_printf_line(code, "default: {");
+      body = 1;
+    } else {
+      fail_at(entry->beg,
+              "switch entries are (case value ...) or (default ...)");
+    }
+
+    for (size_t i = body; i < entry->sexp->len; i++) {
+      transpile_statement(entry->sexp->buffer[i], code);
+    }
+    ccode_printf_line(code, "}");
+  }
+
+  ccode_printf_line(code, "}");
+}
+
+void transpile_do_while(Obj *o, CCode *code) {
+  if (o->sexp->len < 2) {
+    fail_at(o->beg, "do-while needs a condition");
+  }
+
+  ccode_mark_line(code, o);
+  ccode_printf_line(code, "do {");
+  for (size_t i = 2; i < o->sexp->len; i++) {
+    transpile_statement(o->sexp->buffer[i], code);
+  }
+  ccode_printf_line(code, "} while (");
+  transpile_expression(o->sexp->buffer[1], code);
+  ccode_append(code, ");");
+}
+
+void transpile_goto(Obj *o, CCode *code) {
+  char *head = o->sexp->buffer[0]->atom->buffer;
+  if (o->sexp->len != 2 || o->sexp->buffer[1]->tag != ATOM) {
+    fail_at(o->beg, "%s needs a label name", head);
+  }
+
+  ccode_mark_line(code, o);
+  if (strcmp(head, "goto") == 0) {
+    ccode_printf_line(code, "goto %s;", o->sexp->buffer[1]->atom->buffer);
+  } else {
+    ccode_printf_line(code, "%s:;", o->sexp->buffer[1]->atom->buffer);
+  }
 }
 
 void transpile_struct(Obj *o, CCode *code) {

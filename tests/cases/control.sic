@@ -1,0 +1,30 @@
+(#include <stdio.h>)
+
+(fn describe :void (n :int)
+  (switch n
+    (case 1 (printf "one\n") break)
+    (case 2 (printf "two\n"))     ; falls through
+    (default (printf "other\n") break)))
+
+(fn main :int (argc :int argv :char**)
+  (describe 1)
+  (describe 2)
+  (describe 9)
+
+  (decl i :int 0)
+  (do-while (< i 3)
+    (printf "i=%d\n" i)
+    (++ i))
+
+  (decl j :int 0)
+  (while 1
+    (++ j)
+    (if (== j 2) continue)
+    (if (> j 4) break)
+    (printf "j=%d\n" j))
+
+  (goto skip)
+  (printf "not printed\n")
+  (label skip)
+  (printf "done\n")
+  (return 0))
