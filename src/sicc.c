@@ -808,8 +808,14 @@ void transpile_deref(Obj *o, CCode *code) {
 }
 
 void transpile_return(Obj *o, CCode *code) {
-  if (o->sexp->len != 2) {
-    fail_at(o->beg, "return takes exactly one value");
+  if (o->sexp->len > 2) {
+    fail_at(o->beg, "return takes at most one value");
+  }
+
+  if (o->sexp->len == 1) {
+    ccode_mark_line(code, o);
+    ccode_printf_line(code, "return;");
+    return;
   }
 
   Obj *t = o->sexp->buffer[1];

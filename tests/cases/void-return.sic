@@ -1,0 +1,10 @@
+(#include <stdio.h>)
+
+(fn maybe :void (n :int)
+  (if (< n 0) (return))
+  (printf "%d\n" n))
+
+(fn main :int (argc :int argv :char**)
+  (maybe -1)
+  (maybe 3)
+  (return 0))
