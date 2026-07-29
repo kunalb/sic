@@ -1,6 +1,7 @@
 # Work Log
 
 ## 2026-07-29
+- Fixed undefined `va_list` reuse while formatting generated C
 - CUDA support: launch form for kernel calls (qualifiers already worked
   via hyphen-types), saxpy example, codegen golden tests + nvcc/GPU
   gated test tiers

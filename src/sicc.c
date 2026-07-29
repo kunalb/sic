@@ -818,7 +818,17 @@ char *ccode_alloc_line(CCode *code, size_t size) {
 char *ccode_printf_line(CCode *code, const char *format, ...) {
   va_list args;
   va_start(args, format);
-  size_t size = vsnprintf(NULL, 0, format, args);
+  va_list size_args;
+  va_copy(size_args, args);
+  int result = vsnprintf(NULL, 0, format, size_args);
+  va_end(size_args);
+  if (result < 0) {
+    va_end(args);
+    fprintf(stderr, "internal error: couldn't format generated C\n");
+    exit(EXIT_FAILURE);
+  }
+
+  size_t size = (size_t)result;
   char *line = ccode_alloc_line(code, size + 1);
   vsnprintf(line, size + 1, format, args);
   va_end(args);
@@ -833,14 +843,21 @@ void ccode_append(CCode *code, const char *format, ...) {
 
   va_list args;
   va_start(args, format);
-  size_t size = vsnprintf(NULL, 0, format, args);
-  va_end(args);
+  va_list size_args;
+  va_copy(size_args, args);
+  int result = vsnprintf(NULL, 0, format, size_args);
+  va_end(size_args);
+  if (result < 0) {
+    va_end(args);
+    fprintf(stderr, "internal error: couldn't format generated C\n");
+    exit(EXIT_FAILURE);
+  }
 
+  size_t size = (size_t)result;
   char *last = code->lines[code->count - 1];
   size_t cur = strlen(last);
   last = CHECK_ALLOC(realloc(last, cur + size + 1));
 
-  va_start(args, format);
   vsnprintf(last + cur, size + 1, format, args);
   va_end(args);
 
