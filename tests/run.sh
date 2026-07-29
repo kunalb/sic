@@ -10,6 +10,7 @@ fail=0
 
 for src in examples/*.sic tests/cases/*.sic; do
   [ -e "$src" ] || continue
+  case "$src" in *.cu.sic) continue ;; esac # CUDA cases run in their own tier
   name=$(basename "$src" .sic)
   expected="${src%.sic}.out"
   input="${src%.sic}.in"
@@ -63,6 +64,55 @@ for src in tests/codegen/*.sic; do
   else
     echo "FAIL $name (codegen)"
     grep -v '^#line' "$cfile" | diff "${src%.sic}.c" - | head -20
+    fail=$((fail + 1))
+  fi
+done
+
+# CUDA tests: *.cu.sic always transpiles; compiling additionally needs
+# nvcc, and running additionally needs a GPU. Missing toolchain degrades
+# to a SKIP, never a FAIL, so the suite stays honest on any machine.
+have_gpu=false
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+  have_gpu=true
+fi
+
+for src in examples/*.cu.sic tests/cuda/*.cu.sic; do
+  [ -e "$src" ] || continue
+  name=$(basename "$src" .cu.sic)
+  cufile="tests/out/$name.cu"
+  bin="tests/out/$name"
+
+  if ! ./sicc "$src" "$cufile"; then
+    echo "FAIL $name (transpile)"
+    fail=$((fail + 1))
+    continue
+  fi
+
+  if ! command -v nvcc >/dev/null 2>&1; then
+    echo "SKIP $name (transpiled; no nvcc)"
+    pass=$((pass + 1))
+    continue
+  fi
+
+  if ! nvcc -o "$bin" "$cufile" 2>"tests/out/$name.nvcc.log"; then
+    echo "FAIL $name (nvcc, see tests/out/$name.nvcc.log)"
+    fail=$((fail + 1))
+    continue
+  fi
+
+  if [ "$have_gpu" != true ]; then
+    echo "SKIP $name (compiled; no GPU)"
+    pass=$((pass + 1))
+    continue
+  fi
+
+  actual=$("$bin")
+  if [ "$actual" = "$(cat "${src%.cu.sic}.out")" ]; then
+    pass=$((pass + 1))
+  else
+    echo "FAIL $name (output)"
+    echo "$actual" >"tests/out/$name.actual"
+    diff "${src%.cu.sic}.out" "tests/out/$name.actual" | head -20
     fail=$((fail + 1))
   fi
 done

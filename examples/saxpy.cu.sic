@@ -1,0 +1,50 @@
+; SAXPY on the GPU -- y = a*x + y -- verified on the host.
+; nvcc compiles .cu as C++, so malloc results are cast explicitly.
+(#include <stdio.h> <stdlib.h>)
+
+(defmacro cuda-check (call)
+  (do (decl err# :cudaError_t call)
+      (if (!= err# cudaSuccess)
+          (do (printf "cuda error: %s\n" (cudaGetErrorString err#))
+              (exit 1)))))
+
+(fn saxpy :__global__-void (n :int a :float x :float* y :float*)
+  (decl i :int (+ (* blockIdx.x blockDim.x) threadIdx.x))
+  (if (< i n)
+      (set (aref y i) (+ (* a (aref x i)) (aref y i)))))
+
+(fn main :int ()
+  (decl n :int 1048576)
+  (decl bytes :size_t (* n (sizeof :float)))
+
+  (decl x :float* (:float* (malloc bytes)))
+  (decl y :float* (:float* (malloc bytes)))
+  (for (decl i :int 0) (< i n) (++ i)
+    (set (aref x i) 1.0f)
+    (set (aref y i) 2.0f))
+
+  (decl d_x :float* NULL)
+  (decl d_y :float* NULL)
+  (cuda-check (cudaMalloc (& d_x) bytes))
+  (cuda-check (cudaMalloc (& d_y) bytes))
+  (cuda-check (cudaMemcpy d_x x bytes cudaMemcpyHostToDevice))
+  (cuda-check (cudaMemcpy d_y y bytes cudaMemcpyHostToDevice))
+
+  (decl threads :int 256)
+  (decl blocks :int (/ (+ n (- threads 1)) threads))
+  (launch saxpy (blocks threads) n 2.0f d_x d_y)
+  (cuda-check (cudaGetLastError))
+  (cuda-check (cudaMemcpy y d_y bytes cudaMemcpyDeviceToHost))
+
+  (decl max_err :float 0.0f)
+  (for (decl i :int 0) (< i n) (++ i)
+    (decl err :float (- (aref y i) 4.0f))
+    (if (< err 0.0f) (set err (- err)))
+    (if (> err max_err) (set max_err err)))
+  (printf "max error: %f\n" max_err)
+
+  (cuda-check (cudaFree d_x))
+  (cuda-check (cudaFree d_y))
+  (free x)
+  (free y)
+  (return 0))
