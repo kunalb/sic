@@ -120,6 +120,9 @@ void transpile_op_assign(Obj *o, CCode *code);
 void transpile_statement(Obj *o, CCode *code);
 void transpile_expression(Obj *o, CCode *code);
 void transpile_for(Obj *o, CCode *code);
+void transpile_if(Obj *o, CCode *code);
+void transpile_do(Obj *o, CCode *code);
+void transpile_ternary(Obj *o, CCode *code);
 
 // === Implementations ===
 
@@ -586,7 +589,10 @@ static const TRule TRANSPILE_RULES[] = {
     {"^decl$", transpile_decl, STATEMENT},
     {"^set$", transpile_set, STATEMENT},
     {"^while$", transpile_while, STATEMENT},
-    {"^for", transpile_for, STATEMENT},
+    {"^for$", transpile_for, STATEMENT},
+    {"^if$", transpile_if, STATEMENT},
+    {"^do$", transpile_do, STATEMENT},
+    {"^\\?:$", transpile_ternary, EXPRESSION},
     {"^:.*$", transpile_cast, EXPRESSION},
     {".*", transpile_call, EXPRESSION},
 };
@@ -805,6 +811,47 @@ void transpile_for(Obj *o, CCode *code) {
     transpile_statement(o->sexp->buffer[i], code);
   }
   ccode_printf_line(code, "}");
+}
+
+void transpile_if(Obj *o, CCode *code) {
+  if (o->sexp->len < 3 || o->sexp->len > 4) {
+    fail_at(o->beg, "if needs a condition, a branch, and at most an else "
+                    "branch; use (do ...) to group statements");
+  }
+
+  ccode_mark_line(code, o);
+  ccode_printf_line(code, "if (");
+  transpile_expression(o->sexp->buffer[1], code);
+  ccode_append(code, ") {");
+  transpile_statement(o->sexp->buffer[2], code);
+  if (o->sexp->len == 4) {
+    ccode_printf_line(code, "} else {");
+    transpile_statement(o->sexp->buffer[3], code);
+  }
+  ccode_printf_line(code, "}");
+}
+
+void transpile_do(Obj *o, CCode *code) {
+  ccode_mark_line(code, o);
+  ccode_printf_line(code, "{");
+  for (size_t i = 1; i < o->sexp->len; i++) {
+    transpile_statement(o->sexp->buffer[i], code);
+  }
+  ccode_printf_line(code, "}");
+}
+
+void transpile_ternary(Obj *o, CCode *code) {
+  if (o->sexp->len != 4) {
+    fail_at(o->beg, "?: needs a condition and two values");
+  }
+
+  ccode_append(code, "(");
+  transpile_expression(o->sexp->buffer[1], code);
+  ccode_append(code, " ? ");
+  transpile_expression(o->sexp->buffer[2], code);
+  ccode_append(code, " : ");
+  transpile_expression(o->sexp->buffer[3], code);
+  ccode_append(code, ")");
 }
 
 void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {

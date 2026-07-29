@@ -1,0 +1,16 @@
+(#include <stdio.h>)
+
+(fn main :int (argc :int argv :char**)
+  (for (decl i :int 0) (< i 5) (++ i)
+    (if (== i 2)
+      (printf "two\n")
+      (do
+        (printf "%d" i)
+        (printf "\n"))))
+
+  (if (< 1 2)
+    (printf "ordered\n"))
+
+  (decl big :int (?: (> 10 5) 1 0))
+  (printf "big=%d\n" big)
+  (return 0))
