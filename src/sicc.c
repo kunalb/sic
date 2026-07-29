@@ -540,6 +540,27 @@ char *ccode_printf_line(CCode *code, const char *format, ...) {
   return line;
 }
 
+void ccode_append(CCode *code, const char *format, ...) {
+  if (code->count == 0) {
+    ccode_printf_line(code, "");
+  }
+
+  va_list args;
+  va_start(args, format);
+  size_t size = vsnprintf(NULL, 0, format, args);
+  va_end(args);
+
+  char *last = code->lines[code->count - 1];
+  size_t cur = strlen(last);
+  last = CHECK_ALLOC(realloc(last, cur + size + 1));
+
+  va_start(args, format);
+  vsnprintf(last + cur, size + 1, format, args);
+  va_end(args);
+
+  code->lines[code->count - 1] = last;
+}
+
 void ccode_mark_line(CCode *code, Obj *o) {
 #ifndef DISABLE_LINE
   ccode_printf_line(code, "#line %zu \"%s\"", o->beg.row + 1, sic_srcname);
@@ -577,15 +598,14 @@ void transpile_binary_op(Obj *o, CCode *code) {
             o->sexp->buffer[0]->atom->buffer);
   }
 
-  ccode_mark_line(code, o);
-  ccode_printf_line(code, "(");
+  ccode_append(code, "(");
   for (size_t i = 1; i < o->sexp->len; i++) {
     if (i != 1) {
-      ccode_printf_line(code, o->sexp->buffer[0]->atom->buffer);
+      ccode_append(code, " %s ", o->sexp->buffer[0]->atom->buffer);
     }
     transpile_expression(o->sexp->buffer[i], code);
   }
-  ccode_printf_line(code, ")");
+  ccode_append(code, ")");
 }
 
 void transpile_decl(Obj *o, CCode *code) {
@@ -611,10 +631,10 @@ void transpile_decl(Obj *o, CCode *code) {
   }
 
   if (o->sexp->len > 3) {
-    ccode_printf_line(code, "%s %s%s = (", typestr,
+    ccode_printf_line(code, "%s %s%s = ", typestr,
                       o->sexp->buffer[1]->atom->buffer, arr_pt);
     transpile_expression(o->sexp->buffer[3], code);
-    ccode_printf_line(code, ");");
+    ccode_append(code, ";");
   } else {
     ccode_printf_line(code, "%s %s%s;", typestr,
                       o->sexp->buffer[1]->atom->buffer, arr_pt);
@@ -631,9 +651,9 @@ void transpile_set(Obj *o, CCode *code) {
   }
 
   ccode_mark_line(code, o);
-  ccode_printf_line(code, "%s = (", o->sexp->buffer[1]->atom->buffer);
+  ccode_printf_line(code, "%s = ", o->sexp->buffer[1]->atom->buffer);
   transpile_expression(o->sexp->buffer[2], code);
-  ccode_printf_line(code, ");");
+  ccode_append(code, ";");
 };
 
 void transpile_while(Obj *o, CCode *code) {
@@ -644,7 +664,7 @@ void transpile_while(Obj *o, CCode *code) {
   ccode_mark_line(code, o);
   ccode_printf_line(code, "while (");
   transpile_expression(o->sexp->buffer[1], code);
-  ccode_printf_line(code, ") {");
+  ccode_append(code, ") {");
   for (size_t i = 2; i < o->sexp->len; i++) {
     transpile_statement(o->sexp->buffer[i], code);
   }
@@ -656,10 +676,9 @@ void transpile_cast(Obj *o, CCode *code) {
     fail_at(o->beg, "a cast takes exactly one value, e.g. (:int x)");
   }
 
-  ccode_mark_line(code, o);
-  ccode_printf_line(code, "((%s)", o->sexp->buffer[0]->atom->buffer + 1);
+  ccode_append(code, "((%s)", o->sexp->buffer[0]->atom->buffer + 1);
   transpile_expression(o->sexp->buffer[1], code);
-  ccode_printf_line(code, ")");
+  ccode_append(code, ")");
 };
 
 void transpile_op_assign(Obj *o, CCode *code) {
@@ -669,10 +688,10 @@ void transpile_op_assign(Obj *o, CCode *code) {
   }
 
   ccode_mark_line(code, o);
-  ccode_printf_line(code, "%s %s (", o->sexp->buffer[1]->atom->buffer,
+  ccode_printf_line(code, "%s %s ", o->sexp->buffer[1]->atom->buffer,
                     o->sexp->buffer[0]->atom->buffer);
   transpile_expression(o->sexp->buffer[2], code);
-  ccode_printf_line(code, ");");
+  ccode_append(code, ";");
 };
 
 void transpile_deref(Obj *o, CCode *code) {
@@ -680,10 +699,9 @@ void transpile_deref(Obj *o, CCode *code) {
     fail_at(o->beg, "deref takes exactly one value");
   }
 
-  ccode_mark_line(code, o);
-  ccode_printf_line(code, "*(");
+  ccode_append(code, "*(");
   transpile_expression(o->sexp->buffer[1], code);
-  ccode_printf_line(code, ")");
+  ccode_append(code, ")");
 }
 
 void transpile_return(Obj *o, CCode *code) {
@@ -693,13 +711,9 @@ void transpile_return(Obj *o, CCode *code) {
 
   Obj *t = o->sexp->buffer[1];
   ccode_mark_line(code, t);
-  if (t->tag == ATOM) {
-    ccode_printf_line(code, "return %s;", t->atom->buffer);
-  } else {
-    ccode_printf_line(code, "return (");
-    transpile_expression(t, code);
-    ccode_printf_line(code, ");");
-  }
+  ccode_printf_line(code, "return ");
+  transpile_expression(t, code);
+  ccode_append(code, ";");
 }
 
 void transpile_include(Obj *o, CCode *code) {
@@ -719,17 +733,16 @@ void transpile_include(Obj *o, CCode *code) {
 }
 
 void transpile_call(Obj *o, CCode *code) {
-  ccode_mark_line(code, o);
-  ccode_printf_line(code, "%s(", o->sexp->buffer[0]->atom->buffer);
+  ccode_append(code, "%s(", o->sexp->buffer[0]->atom->buffer);
 
   for (size_t j = 1; j < o->sexp->len; j++) {
     if (j > 1) {
-      ccode_printf_line(code, ",");
+      ccode_append(code, ", ");
     }
     transpile_expression(o->sexp->buffer[j], code);
   }
 
-  ccode_printf_line(code, ")");
+  ccode_append(code, ")");
 }
 
 void transpile_fn(Obj *o, CCode *code) {
@@ -745,7 +758,7 @@ void transpile_fn(Obj *o, CCode *code) {
   Obj *type = o->sexp->buffer[2];
 
   ccode_mark_line(code, name);
-  ccode_printf_line(code, "%s %s (", type->atom->buffer + 1,
+  ccode_printf_line(code, "%s %s(", type->atom->buffer + 1,
                     name->atom->buffer);
 
   Obj *args = o->sexp->buffer[3];
@@ -762,13 +775,11 @@ void transpile_fn(Obj *o, CCode *code) {
               "fn arguments must be name :type pairs, e.g. (argc :int)");
     }
 
-    ccode_mark_line(code, arg_name);
-    ccode_printf_line(code, "  %s %s%s", arg_type->atom->buffer + 1,
-                      arg_name->atom->buffer,
-                      j == args->sexp->len - 2 ? "" : ",");
+    ccode_append(code, "%s%s %s", j == 0 ? "" : ", ",
+                 arg_type->atom->buffer + 1, arg_name->atom->buffer);
   }
 
-  ccode_printf_line(code, ") {");
+  ccode_append(code, ") {");
 
   for (size_t j = 4; j < o->sexp->len; j++) {
     transpile_statement(o->sexp->buffer[j], code);
@@ -785,10 +796,11 @@ void transpile_for(Obj *o, CCode *code) {
   ccode_mark_line(code, o);
   ccode_printf_line(code, "for (");
   transpile_statement(o->sexp->buffer[1], code);
+  ccode_append(code, " ");
   transpile_expression(o->sexp->buffer[2], code);
-  ccode_printf_line(code, ";");
+  ccode_append(code, "; ");
   transpile_expression(o->sexp->buffer[3], code);
-  ccode_printf_line(code, ") {");
+  ccode_append(code, ") {");
   for (size_t i = 4; i < o->sexp->len; i++) {
     transpile_statement(o->sexp->buffer[i], code);
   }
@@ -834,10 +846,17 @@ void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {
       int result = regexec(&TRANSPILE_REGEXES[i],
                            o->sexp->buffer[0]->atom->buffer, 0, NULL, 0);
       if (result != REG_NOMATCH) {
+        bool as_statement =
+            ctx == STATEMENT && TRANSPILE_RULES[i].ctx == EXPRESSION;
+        if (as_statement) {
+          ccode_mark_line(code, o);
+          ccode_printf_line(code, "");
+        }
+
         TRANSPILE_RULES[i].fn(o, code);
 
-        if (TRANSPILE_RULES[i].ctx != ctx) {
-          ccode_printf_line(code, ";");
+        if (as_statement) {
+          ccode_append(code, ";");
         }
         return;
       }
@@ -846,8 +865,12 @@ void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {
     fail_at(o->beg, "no rule matches '%s' here",
             o->sexp->buffer[0]->atom->buffer);
   } else {
-    ccode_printf_line(code, "%s%s", o->atom->buffer,
-                      ctx == STATEMENT ? ";" : "");
+    if (ctx == STATEMENT) {
+      ccode_mark_line(code, o);
+      ccode_printf_line(code, "%s;", o->atom->buffer);
+    } else {
+      ccode_append(code, "%s", o->atom->buffer);
+    }
   }
 }
 
