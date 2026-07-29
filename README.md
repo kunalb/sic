@@ -63,12 +63,14 @@ of structs. A cast around one makes a compound literal:
 (set p (:struct-Point (init 40 2)))
 ```
 
-**Operators** are n-ary and parenthesized: `+ - * / % < > <= >= == !=
-&& || & | ^ << >>`, e.g. `(+ a b c)` is `(a + b + c)`. Two-element forms
-of `+ - * & ! ~` are prefix operators, so `(- x)` negates, `(& x)` takes
-an address, and `(* p)` dereferences (`(deref p)` also works). The
-ternary is `(?: cond a b)`; the comma operator is `(, a b)`. `sizeof`
-takes a value or a type — `(sizeof x)`, `(sizeof :unsigned-char)` — and
+**Operators** are parenthesized. Arithmetic, logical, bitwise, and shift
+operators are n-ary: `+ - * / % && || & | ^ << >>`, e.g. `(+ a b c)` is
+`(a + b + c)`. Comparisons `< > <= >= == !=` take exactly two operands;
+combine comparisons explicitly with `&&`. Two-element forms of
+`+ - * & ! ~` are prefix operators, so `(- x)` negates, `(& x)` takes an
+address, and `(* p)` dereferences (`(deref p)` also works). The ternary is
+`(?: cond a b)`; the comma operator is `(, a b)`. `sizeof` takes a value
+or a type — `(sizeof x)`, `(sizeof :unsigned-char)` — and
 `(offsetof :struct-Pair b)` / `(alignof :double)` take types.
 
 **Access**: `(aref a i j)` indexes (chainable), `(-> p field)` and

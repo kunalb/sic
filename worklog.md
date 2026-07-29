@@ -1,6 +1,7 @@
 # Work Log
 
 ## 2026-07-29
+- Made comparisons explicitly binary instead of inheriting C's chained semantics
 - Fixed undefined `va_list` reuse while formatting generated C
 - CUDA support: launch form for kernel calls (qualifiers already worked
   via hyphen-types), saxpy example, codegen golden tests + nvcc/GPU

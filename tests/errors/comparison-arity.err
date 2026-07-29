@@ -1,0 +1,1 @@
+tests/errors/comparison-arity.sic:2:11: error: comparison operator '<' takes exactly two operands

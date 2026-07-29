@@ -27,6 +27,10 @@ mostly comment-free. Newest entries at the bottom of each section.
   an error. This keeps dispatch predictable — a head never means two
   different things depending on where it appears — so the ternary gets its
   own head (`?:`) instead of overloading `if`.
+- Relational and equality operators take exactly two operands. C parses
+  `a < b < c` as `(a < b) < c`, which silently gives comparison chains the
+  wrong meaning; write the individual comparisons and combine them with
+  `&&` instead.
 
 ## Types
 

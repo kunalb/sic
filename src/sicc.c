@@ -993,6 +993,9 @@ void transpile_binary_op(Obj *o, CCode *code) {
   char *op = o->sexp->buffer[0]->atom->buffer;
   bool prefix_ok = op[1] == '\0' && strchr("+-*&!~", op[0]) != NULL;
   bool prefix_only = op[1] == '\0' && (op[0] == '!' || op[0] == '~');
+  bool comparison = strcmp(op, "<") == 0 || strcmp(op, ">") == 0 ||
+                    strcmp(op, "<=") == 0 || strcmp(op, ">=") == 0 ||
+                    strcmp(op, "==") == 0 || strcmp(op, "!=") == 0;
 
   if (o->sexp->len == 2 && prefix_ok) {
     ccode_append(code, "(%s", op);
@@ -1003,6 +1006,9 @@ void transpile_binary_op(Obj *o, CCode *code) {
 
   if (prefix_only) {
     fail_at(o->beg, "operator '%s' takes exactly one operand", op);
+  }
+  if (comparison && o->sexp->len != 3) {
+    fail_at(o->beg, "comparison operator '%s' takes exactly two operands", op);
   }
   if (o->sexp->len < 3) {
     fail_at(o->beg, "operator '%s' needs at least two operands", op);
