@@ -511,6 +511,271 @@ void parser_free(Parser *parser) {
   free(parser);
 }
 
+// === Macro expansion ===
+
+typedef struct Macro {
+  char *name;    // borrowed from def
+  List *params;  // borrowed from def; atoms, last may end in "..."
+  bool has_rest;
+  Obj *template; // borrowed from def
+  Obj *def;      // owns the whole defmacro form
+} Macro;
+
+static Macro *macros = NULL;
+static size_t macros_len = 0;
+static size_t macros_buffer = 0;
+static size_t gensym_counter = 0;
+
+#define MACRO_MAX_DEPTH 200
+
+static Macro *macro_find(const char *name) {
+  for (size_t i = 0; i < macros_len; i++) {
+    if (strcmp(macros[i].name, name) == 0) {
+      return &macros[i];
+    }
+  }
+  return NULL;
+}
+
+static bool macro_param_is_rest(const char *name) {
+  size_t n = strlen(name);
+  return n > 3 && strcmp(name + n - 3, "...") == 0;
+}
+
+static void macro_register(Obj *o) {
+  if (o->sexp->len != 4 || o->sexp->buffer[1]->tag != ATOM ||
+      o->sexp->buffer[2]->tag != SEXP) {
+    fail_at(o->beg, "defmacro needs a name, a parameter list, and one "
+                    "template form, e.g. (defmacro twice (x) (do x x))");
+  }
+
+  char *name = o->sexp->buffer[1]->atom->buffer;
+  if (macro_find(name) != NULL) {
+    fail_at(o->sexp->buffer[1]->beg, "macro '%s' is already defined", name);
+  }
+
+  List *params = o->sexp->buffer[2]->sexp;
+  bool has_rest = false;
+  for (size_t i = 0; i < params->len; i++) {
+    Obj *p = params->buffer[i];
+    if (p->tag != ATOM) {
+      fail_at(p->beg, "macro parameters must be plain atoms");
+    }
+    if (macro_param_is_rest(p->atom->buffer)) {
+      if (i != params->len - 1) {
+        fail_at(p->beg, "only the last macro parameter may end in '...'");
+      }
+      has_rest = true;
+    }
+  }
+
+  if (macros_len >= macros_buffer) {
+    macros_buffer = macros_buffer == 0 ? 8 : macros_buffer * 2;
+    macros = CHECK_ALLOC(realloc(macros, macros_buffer * sizeof(Macro)));
+  }
+  macros[macros_len++] = (Macro){.name = name,
+                                 .params = params,
+                                 .has_rest = has_rest,
+                                 .template = o->sexp->buffer[3],
+                                 .def = o};
+}
+
+static void macros_free(void) {
+  for (size_t i = 0; i < macros_len; i++) {
+    obj_free(macros[i].def);
+  }
+  free(macros);
+  macros = NULL;
+  macros_len = macros_buffer = 0;
+}
+
+// Expanded code is stamped with the call site's position, so diagnostics
+// and #line directives point at the user's code, not the template.
+static Obj *obj_clone(Obj *o, Pos pos) {
+  Obj *c = obj_init(o->tag);
+  c->beg = pos;
+  c->end = pos;
+  switch (o->tag) {
+  case ATOM:
+    for (size_t i = 0; i < o->atom->len; i++) {
+      atom_add(c->atom, o->atom->buffer[i]);
+    }
+    break;
+  case SEXP:
+    for (size_t i = 0; i < o->sexp->len; i++) {
+      list_add(c->sexp, obj_clone(o->sexp->buffer[i], pos));
+    }
+    break;
+  }
+  return c;
+}
+
+static Obj *obj_atom_new(const char *text, Pos pos) {
+  Obj *o = obj_init(ATOM);
+  o->beg = pos;
+  o->end = pos;
+  do {
+    atom_add(o->atom, *text);
+  } while (*text++ != '\0');
+  return o;
+}
+
+// Template atoms ending in '#' (e.g. tmp#) rename to a fresh identifier,
+// shared within one expansion, unique across expansions.
+typedef struct Gensyms {
+  char **names;   // template spellings, e.g. "tmp#"
+  char **uniques; // generated names, e.g. "tmp__3"
+  size_t len;
+  size_t buffer;
+} Gensyms;
+
+static bool atom_is_gensym(const char *name) {
+  size_t n = strlen(name);
+  return n >= 2 && name[n - 1] == '#';
+}
+
+static const char *gensym_lookup(Gensyms *g, const char *name) {
+  for (size_t i = 0; i < g->len; i++) {
+    if (strcmp(g->names[i], name) == 0) {
+      return g->uniques[i];
+    }
+  }
+
+  if (g->len >= g->buffer) {
+    g->buffer = g->buffer == 0 ? 4 : g->buffer * 2;
+    g->names = CHECK_ALLOC(realloc(g->names, g->buffer * sizeof(char *)));
+    g->uniques = CHECK_ALLOC(realloc(g->uniques, g->buffer * sizeof(char *)));
+  }
+
+  size_t n = strlen(name);
+  char *uniq = CHECK_ALLOC(malloc(n + 32));
+  snprintf(uniq, n + 32, "%.*s__%zu", (int)(n - 1), name, gensym_counter++);
+  g->names[g->len] = CHECK_ALLOC(strdup(name));
+  g->uniques[g->len] = uniq;
+  g->len++;
+  return uniq;
+}
+
+static void gensyms_free(Gensyms *g) {
+  for (size_t i = 0; i < g->len; i++) {
+    free(g->names[i]);
+    free(g->uniques[i]);
+  }
+  free(g->names);
+  free(g->uniques);
+}
+
+static Obj *macro_substitute(Obj *t, Macro *m, Obj *call, Gensyms *gensyms) {
+  Pos pos = call->beg;
+
+  if (t->tag == ATOM) {
+    char *text = t->atom->buffer;
+    for (size_t i = 0; i < m->params->len; i++) {
+      char *param = m->params->buffer[i]->atom->buffer;
+      if (strcmp(text, param) != 0) {
+        continue;
+      }
+      if (m->has_rest && i == m->params->len - 1) {
+        fail_at(pos,
+                "rest parameter '%s' of macro '%s' can only be spliced "
+                "inside a form",
+                param, m->name);
+      }
+      return obj_clone(call->sexp->buffer[i + 1], pos);
+    }
+    if (atom_is_gensym(text)) {
+      return obj_atom_new(gensym_lookup(gensyms, text), pos);
+    }
+    return obj_clone(t, pos);
+  }
+
+  Obj *out = obj_init(SEXP);
+  out->beg = pos;
+  out->end = pos;
+  for (size_t i = 0; i < t->sexp->len; i++) {
+    Obj *child = t->sexp->buffer[i];
+    bool splice = child->tag == ATOM && m->has_rest &&
+                  strcmp(child->atom->buffer,
+                         m->params->buffer[m->params->len - 1]->atom->buffer) ==
+                      0;
+    if (splice) {
+      for (size_t j = m->params->len; j < call->sexp->len; j++) {
+        list_add(out->sexp, obj_clone(call->sexp->buffer[j], pos));
+      }
+      continue;
+    }
+    list_add(out->sexp, macro_substitute(child, m, call, gensyms));
+  }
+  return out;
+}
+
+static Obj *macro_expand_call(Macro *m, Obj *call) {
+  size_t fixed = m->params->len - (m->has_rest ? 1 : 0);
+  size_t given = call->sexp->len - 1;
+  if (given < fixed || (!m->has_rest && given > fixed)) {
+    fail_at(call->beg, "macro '%s' takes %s%zu argument%s, got %zu", m->name,
+            m->has_rest ? "at least " : "", fixed, fixed == 1 ? "" : "s",
+            given);
+  }
+
+  Gensyms gensyms = {0};
+  Obj *result = macro_substitute(m->template, m, call, &gensyms);
+  gensyms_free(&gensyms);
+  return result;
+}
+
+// Outermost-first: keep expanding the head until it is no longer a macro,
+// then recurse into children. Macro invocations look like calls — a form
+// whose head atom names a macro; bare atoms never expand.
+static Obj *expand_obj(Obj *o, size_t depth) {
+  while (o->tag == SEXP && o->sexp->len > 0 &&
+         o->sexp->buffer[0]->tag == ATOM) {
+    char *head = o->sexp->buffer[0]->atom->buffer;
+    if (strcmp(head, "defmacro") == 0) {
+      fail_at(o->beg, "defmacro is only allowed at the top level");
+    }
+
+    Macro *m = macro_find(head);
+    if (m == NULL) {
+      break;
+    }
+    if (depth++ >= MACRO_MAX_DEPTH) {
+      fail_at(o->beg,
+              "macro expansion nested deeper than %d levels; is '%s' "
+              "recursive?",
+              MACRO_MAX_DEPTH, head);
+    }
+
+    Obj *expanded = macro_expand_call(m, o);
+    obj_free(o);
+    o = expanded;
+  }
+
+  if (o->tag == SEXP) {
+    for (size_t i = 0; i < o->sexp->len; i++) {
+      o->sexp->buffer[i] = expand_obj(o->sexp->buffer[i], depth);
+    }
+  }
+  return o;
+}
+
+// Consumes defmacro forms (definitions must precede uses) and expands
+// everything else in place.
+void expand_toplevel(List *top) {
+  size_t kept = 0;
+  for (size_t i = 0; i < top->len; i++) {
+    Obj *o = top->buffer[i];
+    if (o->tag == SEXP && o->sexp->len > 0 &&
+        o->sexp->buffer[0]->tag == ATOM &&
+        strcmp(o->sexp->buffer[0]->atom->buffer, "defmacro") == 0) {
+      macro_register(o);
+      continue;
+    }
+    top->buffer[kept++] = expand_obj(o, 0);
+  }
+  top->len = kept;
+}
+
 // === Output behavior ===
 
 CCode *ccode_init() {
@@ -1428,7 +1693,9 @@ int main(int argc, char **argv) {
   sic_srcname = argv[1];
   Parser *parser = parser_init(argv[1]);
   parser_parse(parser);
+  expand_toplevel(parser->list);
   CCode *code = transpile(parser->list);
+  macros_free();
   parser_free(parser);
 
   FILE *fp = stdout;

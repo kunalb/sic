@@ -1,0 +1,3 @@
+(fn main :int ()
+  (defmacro foo (x) x)
+  (return 0))

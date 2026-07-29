@@ -1,6 +1,8 @@
 # Work Log
 
 ## 2026-07-29
+- Template macros: defmacro with rest-param splicing, `#` auto-gensym,
+  outermost-first expansion pass between parse and transpile
 - Makefile + golden test harness (incl. error-case tests), bug fixes
 - Line comments, positioned diagnostics, single-line C output
 - Language completeness: full operator set, if/do/?:, aref/->/.,

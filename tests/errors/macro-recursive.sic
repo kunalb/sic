@@ -1,0 +1,5 @@
+(defmacro forever (x) (forever x))
+
+(fn main :int ()
+  (forever 1)
+  (return 0))

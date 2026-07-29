@@ -1,0 +1,5 @@
+(defmacro square (x) (* x x))
+
+(fn main :int ()
+  (printf "%d" (square 1 2))
+  (return 0))

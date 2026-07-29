@@ -114,6 +114,30 @@ takes a value or a type — `(sizeof x)`, `(sizeof :unsigned-char)` — and
 (#pragma omp parallel for)
 ```
 
+**Macros** are compile-time templates: `(defmacro name (params) template)`
+substitutes the call-site sexps into the template — no evaluation, pure
+tree rewriting — before transpilation. A final parameter ending in `...`
+collects the remaining forms and splices them where it appears in the
+template. Atoms ending in `#` (like `tmp#`) rename to a fresh identifier
+per expansion, so introduced locals can't capture the caller's variables.
+Macros must be defined before use, at the top level, and may use other
+macros in their templates; a macro may even redefine a builtin form.
+
+```lisp
+(defmacro when (cond body...)
+  (if cond (do body...)))
+
+(defmacro swap (a b)
+  (do (decl tmp# :int a)
+      (set a b)
+      (set b tmp#)))
+
+(when (< x 10)
+  (printf "small\n")
+  (+= x 1))
+; expands to: (if (< x 10) (do (printf "small\n") (+= x 1)))
+```
+
 **Function pointers** are the type form `(fnptr :ret (:argtypes...))`,
 usable in `decl`, `typedef`, struct fields, and `fn` arguments:
 

@@ -1,0 +1,45 @@
+; Template macros: substitution, rest-splicing, gensym hygiene, nesting.
+(#include <stdio.h>)
+
+(defmacro when (cond body...)
+  (if cond (do body...)))
+
+(defmacro unless (cond body...)
+  (if (! cond) (do body...)))
+
+(defmacro swap (a b)
+  (do (decl tmp# :int a)
+      (set a b)
+      (set b tmp#)))
+
+(defmacro square (x) (* x x))
+
+; a macro whose template uses another macro
+(defmacro clamp-inc (x limit)
+  (when (< x limit) (++ x)))
+
+(fn main :int ()
+  (decl x :int 3)
+  (decl y :int 8)
+
+  (when (< x y)
+    (printf "x is smaller\n")
+    (printf "still here\n"))
+
+  (unless (> x y)
+    (printf "not bigger\n"))
+
+  (swap x y)
+  (printf "%d %d\n" x y)
+
+  ; hygiene: the caller's tmp is not captured by swap's tmp#
+  (decl tmp :int 99)
+  (swap x y)
+  (printf "tmp is %d\n" tmp)
+
+  ; call-site argument used twice stays parenthesized
+  (printf "%d\n" (square (+ x 1)))
+
+  (clamp-inc x 100)
+  (printf "%d\n" x)
+  (return 0))

@@ -64,6 +64,32 @@ mostly comment-free. Newest entries at the bottom of each section.
   inside bodies are not auto-wrapped, though — a body that juxtaposes a
   parameter with higher-precedence syntax by hand can still misbind.
 
+## Macros
+
+- `defmacro` is pure template substitution, run as a separate pass between
+  parse and transpile — the emitter and rule table never see a macro form.
+  No quasiquote/unquote: the single template form *is* the template, atoms
+  naming parameters are replaced, everything else passes through. Bodies
+  that want multiple statements wrap themselves in `(do ...)`. Procedural
+  macros (bodies executed at compile time) wait for the REPL's
+  compile-and-load machinery, which they'll share.
+- Rest parameters spell the `...` at both declaration and use
+  (`body...`), matching variadic `fn`; where the atom appears in the
+  template the collected forms are spliced, not inserted as a list.
+- Hygiene for introduced bindings is opt-in via auto-gensym: template
+  atoms ending in `#` rename to `name__N`, shared within one expansion,
+  fresh across expansions (the Clojure convention). Call-site hygiene was
+  already covered by parenthesized expression emission.
+- Expansion is outermost-first with a depth cap of 200, so a recursive
+  macro is a positioned error instead of a hang. Expanded nodes are
+  stamped with the call site's position: `#line` and later errors point
+  at the user's code, never the template.
+- Macros shadow builtin rules (expansion runs first, trivially) — that's
+  the extensibility story, and `defmacro` is explicit enough that
+  shadowing is never accidental. Redefining a *macro* name is an error,
+  though. Definitions are top-level only and must precede use; scoped
+  macros can come later if a real program wants them.
+
 ## Diagnostics
 
 - Malformed input produces `file:row:col: error: message` and exits

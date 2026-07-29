@@ -1,0 +1,2 @@
+(defmacro twice (x) (do x x))
+(defmacro twice (x) (do x x))
