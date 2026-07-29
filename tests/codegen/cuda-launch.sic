@@ -1,0 +1,8 @@
+; Kernel launches: 2-, 3-, and 4-element configs, dim3 expressions,
+; expression kernels, and argument-free launches.
+(fn go :void (n :int stream :cudaStream_t k (fnptr :void (:int)))
+  (launch add (blocks threads) n 2.0f d_x d_y)
+  (launch add ((dim3 16 16) (dim3 8 8)) n)
+  (launch reduce (grid block (* n (sizeof :float))) d_in d_out)
+  (launch reduce (grid block 0 stream) d_in d_out)
+  (launch k (1 n)))

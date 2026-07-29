@@ -140,6 +140,7 @@ void transpile_pragma(Obj *o, CCode *code);
 void transpile_typeop(Obj *o, CCode *code);
 void transpile_do_while(Obj *o, CCode *code);
 void transpile_goto(Obj *o, CCode *code);
+void transpile_launch(Obj *o, CCode *code);
 
 // === Implementations ===
 
@@ -962,6 +963,7 @@ static const TRule TRANSPILE_RULES[] = {
     {"^switch$", transpile_switch, STATEMENT},
     {"^do-while$", transpile_do_while, STATEMENT},
     {"^(goto|label)$", transpile_goto, STATEMENT},
+    {"^launch$", transpile_launch, EXPRESSION},
     {"^(struct|union)$", transpile_struct, STATEMENT},
     {"^enum$", transpile_enum, STATEMENT},
     {"^typedef$", transpile_typedef, STATEMENT},
@@ -1526,6 +1528,37 @@ void transpile_goto(Obj *o, CCode *code) {
   } else {
     ccode_printf_line(code, "%s:;", o->sexp->buffer[1]->atom->buffer);
   }
+}
+
+// CUDA kernel launch: (launch kernel (grid block [shared stream]) args...)
+// becomes kernel<<<grid, block>>>(args). The config sexp mirrors the
+// <<<>>> grouping; qualifiers like __global__ need no forms at all since
+// they ride on hyphen-types.
+void transpile_launch(Obj *o, CCode *code) {
+  if (o->sexp->len < 3 || o->sexp->buffer[2]->tag != SEXP ||
+      o->sexp->buffer[2]->sexp->len < 2 || o->sexp->buffer[2]->sexp->len > 4) {
+    fail_at(o->beg,
+            "launch needs a kernel and a (grid block) config with optional "
+            "shared-bytes and stream, e.g. (launch add (blocks threads) out)");
+  }
+
+  transpile_postfix_base(o->sexp->buffer[1], code);
+  ccode_append(code, "<<<");
+  List *cfg = o->sexp->buffer[2]->sexp;
+  for (size_t i = 0; i < cfg->len; i++) {
+    if (i > 0) {
+      ccode_append(code, ", ");
+    }
+    transpile_expression(cfg->buffer[i], code);
+  }
+  ccode_append(code, ">>>(");
+  for (size_t i = 3; i < o->sexp->len; i++) {
+    if (i > 3) {
+      ccode_append(code, ", ");
+    }
+    transpile_expression(o->sexp->buffer[i], code);
+  }
+  ccode_append(code, ")");
 }
 
 void transpile_struct(Obj *o, CCode *code) {
