@@ -1,0 +1,27 @@
+; Advent of Code 2024, day 1 part 2: similarity score.
+(#include <stdio.h> <stdlib.h> <string.h>)
+
+(fn count_of :int (needle :int list :const-int* n :int)
+  (decl count :int 0)
+  (for (decl i :int 0) (< i n) (++ i)
+    (if (== (aref list i) needle)
+      (++ count)))
+  (return count))
+
+(fn main :int (argc :int argv :char**)
+  (decl line :char[1024])
+  (decl list1 :int[8096])
+  (decl list2 :int[8096])
+  (decl count :int 0)
+
+  (while (!= (fgets line 1024 stdin) NULL)
+    (set (aref list1 count) (atoi (strtok line " ")))
+    (set (aref list2 count) (atoi (strtok NULL " ")))
+    (++ count))
+
+  (decl score :long 0)
+  (for (decl i :int 0) (< i count) (++ i)
+    (+= score (* (aref list1 i) (count_of (aref list1 i) list2 count))))
+
+  (printf "%ld\n" score)
+  (return 0))
