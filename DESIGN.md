@@ -94,6 +94,28 @@ mostly comment-free. Newest entries at the bottom of each section.
   though. Definitions are top-level only and must precede use; scoped
   macros can come later if a real program wants them.
 
+## CUDA
+
+- No cuda-named machinery in the transpiler. Qualifiers (`__global__`,
+  `__shared__`, `__constant__`, ...) deliberately ride on hyphen-types —
+  they're just storage-class-like tokens, so `:__global__-void` works the
+  way `:static-int` always has, and anything NVIDIA adds later works for
+  free. Builtins (`threadIdx.x`, `dim3`, `__syncthreads`) are ordinary
+  atoms and calls.
+- The single form CUDA actually needs is `launch`, since C has no
+  `<<<>>>` syntax: `(launch kernel (grid block [shared stream]) args...)`.
+  The config sexp mirrors the chevron grouping; its elements are
+  arbitrary expressions so `(dim3 16 16)` works.
+- There is no C mode for `.cu` files — nvcc's frontend is C++ only, and
+  "CUDA C" in practice means C-style code in the C/C++ common subset.
+  sic doesn't try to enforce that (the transpiler doesn't know the
+  target); the practical rules are: cast `malloc` results, keep
+  designated initializers in declaration order, avoid C++ keywords as
+  identifiers. The nvcc-gated test tier catches the rest.
+- `*.cu.sic` is the harness's compile-with-nvcc marker; `sicc` itself
+  stays toolchain-ignorant. Transpilation is always tested; compile and
+  run tiers gate on nvcc and a GPU, degrading to SKIP.
+
 ## Diagnostics
 
 - Malformed input produces `file:row:col: error: message` and exits

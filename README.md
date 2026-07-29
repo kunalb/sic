@@ -149,6 +149,26 @@ usable in `decl`, `typedef`, struct fields, and `fn` arguments:
 A call whose head is an expression calls through it: `((. op apply) 4 5)`
 is `((op).apply)(4, 5)`.
 
+**CUDA** needs almost nothing special: qualifiers ride on hyphen-types
+(`:__global__-void`, `:__shared__-float[256]`, `:__device__-float`),
+builtins like `threadIdx.x` and `__syncthreads` pass through as atoms
+and calls, and the one piece of syntax C lacks is the kernel launch:
+
+```lisp
+(fn saxpy :__global__-void (n :int a :float x :float* y :float*)
+  (decl i :int (+ (* blockIdx.x blockDim.x) threadIdx.x))
+  (if (< i n) (set (aref y i) (+ (* a (aref x i)) (aref y i)))))
+
+(launch saxpy (blocks threads) n 2.0f d_x d_y)
+; → saxpy<<<blocks, threads>>>(n, 2.0f, d_x, d_y);
+(launch k ((dim3 16 16) (dim3 8 8) smem-bytes stream) args)
+```
+
+Name the file `*.cu.sic` so the test harness compiles it with nvcc
+(skipping cleanly when nvcc or a GPU is absent). nvcc compiles `.cu` as
+C++, so cast `malloc` results — `(:float* (malloc bytes))` — and keep
+designated initializers in declaration order. See `examples/saxpy.cu.sic`.
+
 ## Structure, conventions
 - (Haven't written enough C yet to have taste, making things up as I go)
 

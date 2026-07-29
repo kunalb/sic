@@ -1,6 +1,9 @@
 # Work Log
 
 ## 2026-07-29
+- CUDA support: launch form for kernel calls (qualifiers already worked
+  via hyphen-types), saxpy example, codegen golden tests + nvcc/GPU
+  gated test tiers
 - Template macros: defmacro with rest-param splicing, `#` auto-gensym,
   outermost-first expansion pass between parse and transpile
 - Makefile + golden test harness (incl. error-case tests), bug fixes
