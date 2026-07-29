@@ -385,7 +385,7 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
             finished = true;
           }
         }
-      } else if (isspace(ch) || ch == ')') {
+      } else if (isspace(ch) || ch == ')' || ch == ';') {
         finished = true;
       }
 
@@ -398,6 +398,13 @@ void parser_next(Parser *parser, List *container, Atom *atom) {
     } else {
       if (isspace(ch)) {
         srcfile_getc(parser->srcfile);
+        continue;
+      }
+
+      if (ch == ';') {
+        while (ch != EOF && ch != '\n') {
+          ch = srcfile_getc(parser->srcfile);
+        }
         continue;
       }
 

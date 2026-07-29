@@ -1,0 +1,8 @@
+; A whole-line comment before any code.
+(#include <stdio.h>)
+
+(fn main :int (argc :int argv :char**) ; trailing comment
+  ; comment on its own line, inside a form
+  (printf "%d\n" 42); comment touching an atom terminator
+  (return 0))
+; comment at end of file
