@@ -1,0 +1,1 @@
+tests/errors/decl-too-many.sic:2:3: error: decl needs a name and a :type, with at most one initializer

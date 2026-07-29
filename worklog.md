@@ -1,6 +1,7 @@
 # Work Log
 
 ## 2026-07-29
+- Rejected extra declaration forms instead of silently ignoring them
 - Made runtime goldens check exit status and exact stdout bytes
 - Made comparisons explicitly binary instead of inheriting C's chained semantics
 - Fixed undefined `va_list` reuse while formatting generated C

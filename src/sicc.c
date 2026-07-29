@@ -1036,8 +1036,10 @@ void transpile_incdec(Obj *o, CCode *code) {
 }
 
 void transpile_decl(Obj *o, CCode *code) {
-  if (o->sexp->len < 3 || o->sexp->buffer[1]->tag != ATOM) {
-    fail_at(o->beg, "decl needs a name and a :type, e.g. (decl x :int)");
+  if ((o->sexp->len != 3 && o->sexp->len != 4) ||
+      o->sexp->buffer[1]->tag != ATOM) {
+    fail_at(o->beg, "decl needs a name and a :type, with at most one "
+                    "initializer, e.g. (decl x :int 1)");
   }
 
   ccode_mark_line(code, o);
