@@ -124,6 +124,8 @@ void transpile_if(Obj *o, CCode *code);
 void transpile_do(Obj *o, CCode *code);
 void transpile_ternary(Obj *o, CCode *code);
 void transpile_incdec(Obj *o, CCode *code);
+void transpile_aref(Obj *o, CCode *code);
+void transpile_member(Obj *o, CCode *code);
 
 // === Implementations ===
 
@@ -589,6 +591,8 @@ static const TRule TRANSPILE_RULES[] = {
     {"^(\\+|-|\\*|/|%|<|>|<=|>=|==|!=|&&|\\|\\||&|\\||\\^|<<|>>|!|~)$",
      transpile_binary_op, EXPRESSION},
     {"^deref$", transpile_deref, EXPRESSION},
+    {"^aref$", transpile_aref, EXPRESSION},
+    {"^(->|\\.)$", transpile_member, EXPRESSION},
     {"^decl$", transpile_decl, STATEMENT},
     {"^set$", transpile_set, STATEMENT},
     {"^while$", transpile_while, STATEMENT},
@@ -679,15 +683,58 @@ void transpile_decl(Obj *o, CCode *code) {
 }
 
 void transpile_set(Obj *o, CCode *code) {
-  if (o->sexp->len != 3 || o->sexp->buffer[1]->tag != ATOM) {
-    fail_at(o->beg, "set needs a name and a value, e.g. (set x 1)");
+  if (o->sexp->len != 3) {
+    fail_at(o->beg, "set needs a place and a value, e.g. (set x 1)");
   }
 
   ccode_mark_line(code, o);
-  ccode_printf_line(code, "%s = ", o->sexp->buffer[1]->atom->buffer);
+  ccode_printf_line(code, "");
+  transpile_expression(o->sexp->buffer[1], code);
+  ccode_append(code, " = ");
   transpile_expression(o->sexp->buffer[2], code);
   ccode_append(code, ";");
 };
+
+// Postfix operators bind tighter than the prefix forms a base expression
+// may end with, so anything but a plain atom gets wrapped in parens.
+void transpile_postfix_base(Obj *o, CCode *code) {
+  if (o->tag == ATOM) {
+    transpile_expression(o, code);
+  } else {
+    ccode_append(code, "(");
+    transpile_expression(o, code);
+    ccode_append(code, ")");
+  }
+}
+
+void transpile_aref(Obj *o, CCode *code) {
+  if (o->sexp->len < 3) {
+    fail_at(o->beg, "aref needs an array and at least one index");
+  }
+
+  transpile_postfix_base(o->sexp->buffer[1], code);
+  for (size_t i = 2; i < o->sexp->len; i++) {
+    ccode_append(code, "[");
+    transpile_expression(o->sexp->buffer[i], code);
+    ccode_append(code, "]");
+  }
+}
+
+void transpile_member(Obj *o, CCode *code) {
+  char *op = o->sexp->buffer[0]->atom->buffer;
+  if (o->sexp->len < 3) {
+    fail_at(o->beg, "'%s' needs a struct and a field", op);
+  }
+
+  transpile_postfix_base(o->sexp->buffer[1], code);
+  for (size_t i = 2; i < o->sexp->len; i++) {
+    Obj *field = o->sexp->buffer[i];
+    if (field->tag != ATOM) {
+      fail_at(field->beg, "field names must be plain atoms");
+    }
+    ccode_append(code, "%s%s", op, field->atom->buffer);
+  }
+}
 
 void transpile_while(Obj *o, CCode *code) {
   if (o->sexp->len < 2) {
