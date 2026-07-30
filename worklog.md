@@ -1,6 +1,8 @@
 # Work Log
 
 ## 2026-07-29
+- Emacs sic-mode: font-lock, indentation, imenu, completion, flymake
+  (piggybacking on the #line markers for C diagnostics)
 - Rejected extra declaration forms instead of silently ignoring them
 - Made runtime goldens check exit status and exact stdout bytes
 - Made comparisons explicitly binary instead of inheriting C's chained semantics
