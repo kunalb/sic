@@ -5,6 +5,7 @@
   (piggybacking on the #line markers for C diagnostics)
 - sic-lsp: LSP proxy putting clangd behind .sic buffers (completion,
   hover, definitions, references) via the generated C and #line map
+- Tree-sitter grammar + highlight queries for non-Emacs editors
 - Rejected extra declaration forms instead of silently ignoring them
 - Made runtime goldens check exit status and exact stdout bytes
 - Made comparisons explicitly binary instead of inheriting C's chained semantics

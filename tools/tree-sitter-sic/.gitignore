@@ -1,0 +1,19 @@
+# Everything `tree-sitter generate` and the language bindings produce.
+src/
+bindings/
+build/
+node_modules/
+*.wasm
+*.so
+*.dylib
+Cargo.toml
+Cargo.lock
+Makefile
+Package.swift
+binding.gyp
+go.mod
+go.sum
+setup.py
+pyproject.toml
+package-lock.json
+log.html

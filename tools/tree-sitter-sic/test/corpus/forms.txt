@@ -1,0 +1,46 @@
+==================
+atoms and calls
+==================
+
+(#include <stdio.h>)
+
+(fn main :int (argc :int argv :char**)
+  ; a comment
+  (decl x :float 1.0f)
+  (printf "%c %d\n" 'x' -1)
+  (return 0))
+
+---
+
+(source_file
+  (list (preproc) (symbol))
+  (list (symbol) (symbol) (type)
+    (list (symbol) (type) (symbol) (type))
+    (comment)
+    (list (symbol) (symbol) (type) (number))
+    (list (symbol) (string) (character) (number))
+    (list (symbol) (number))))
+
+==================
+operators, types, launch
+==================
+
+(decl a :int[3] (init 1 2 3))
+(set (aref a 0) (+ (* 2 3) (?: (< 1 2) 1 0)))
+(launch saxpy (blocks threads) n 2.0f d_x d_y)
+
+---
+
+(source_file
+  (list (symbol) (symbol) (type)
+    (list (symbol) (number) (number) (number)))
+  (list (symbol)
+    (list (symbol) (symbol) (number))
+    (list (symbol)
+      (list (symbol) (number) (number))
+      (list (symbol)
+        (list (symbol) (number) (number))
+        (number) (number))))
+  (list (symbol) (symbol)
+    (list (symbol) (symbol))
+    (symbol) (number) (symbol) (symbol)))

@@ -57,3 +57,20 @@ Notes:
 - Any LSP client works the same way, e.g. Neovim:
   `vim.lsp.start { cmd = { '/path/to/sic/tools/sic-lsp' } }` for
   `*.sic` buffers.
+
+## Tree-sitter: tree-sitter-sic/
+
+A grammar for editors beyond Emacs (Neovim, Zed, Helix) and anything
+else tree-sitter reaches. Atoms are whitespace/paren-delimited, so the
+grammar is one regex per atom category plus lists;
+`queries/highlights.scm` classifies form heads (keywords, builtins,
+operators, definition names). The generated parser is not checked in:
+
+```sh
+cd tools/tree-sitter-sic
+npx tree-sitter-cli@0.25 generate   # writes src/parser.c
+npx tree-sitter-cli@0.25 test       # corpus tests
+```
+
+In Emacs 29+ the plain `sic-mode` already covers highlighting; the
+grammar exists for portability, not because Emacs needs it.

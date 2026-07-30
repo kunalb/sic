@@ -1,0 +1,14 @@
+{
+  "grammars": [
+    {
+      "name": "sic",
+      "scope": "source.sic",
+      "file-types": ["sic"],
+      "highlights": "queries/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "description": "Tree-sitter grammar for the (sic) language"
+  }
+}
