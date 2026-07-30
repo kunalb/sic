@@ -171,6 +171,16 @@ Name the file `*.cu.sic` so the test harness compiles it with nvcc
 C++, so cast `malloc` results — `(:float* (malloc bytes))` — and keep
 designated initializers in declaration order. See `examples/saxpy.cu.sic`.
 
+## Editor support
+
+`tools/` has the editor story (see `tools/README.md` for setup):
+`sic-mode.el` gives Emacs highlighting, indentation, completion, and
+flymake diagnostics; `sic-lsp` puts clangd behind `.sic` buffers for
+semantic completion, hover, and go-to-definition in any LSP editor;
+`tree-sitter-sic/` is a grammar for everything else. All of it rides
+on the transpiler's `#line` markers rather than reimplementing
+analysis.
+
 ## Structure, conventions
 - (Haven't written enough C yet to have taste, making things up as I go)
 
