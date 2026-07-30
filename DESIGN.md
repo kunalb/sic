@@ -136,3 +136,22 @@ mostly comment-free. Newest entries at the bottom of each section.
   ever lands.
 - `#line` directives name the `.sic` source, so compiler errors from the
   generated C and debuggers both point back at the original file.
+
+## Editor tooling
+
+Everything in `tools/` piggybacks on the transpilation pipeline instead
+of reimplementing analysis; `sicc` itself stays editor-ignorant.
+
+- Flymake (Emacs) needs no mapping layer at all: it runs `sicc` then
+  `cc -fsyntax-only` on the generated C, and the `#line` markers make
+  the C compiler report diagnostics at `.sic` positions by itself.
+- `sic-lsp` wraps clangd rather than growing a semantic analyzer. It
+  strips the `#line` markers from the generated C (clangd would
+  attribute those lines to a file it can't see) and keeps them as a
+  line map; columns are recovered by matching the identifier token,
+  which works because atoms pass through to C unchanged. sicc's own
+  diagnostics are published directly, so syntax errors surface even
+  while the last good generated C is stale.
+- Completion textEdits from clangd are dropped rather than translated —
+  they're C-coordinate edits into generated text; editors fall back to
+  replacing the symbol at point, which is the right behavior in sic.

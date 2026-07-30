@@ -25,3 +25,35 @@ type errors both land on the right line with no mapping layer. `sicc`
 is found in a dominating directory of the file (so working inside this
 repo just works), or set `sic-mode-sicc-program`. For `.cu.sic`
 buffers the C stage uses nvcc when available and is skipped otherwise.
+
+## LSP: sic-lsp
+
+`sic-lsp` is a proxy that puts clangd behind `.sic` files: semantic
+completion, hover, go-to-definition (including into C headers),
+find-references, signature help, and live clang diagnostics. Each
+buffer is retranspiled on change; clangd analyzes the generated C and
+the proxy translates positions both ways through the `#line` map. See
+DESIGN.md ("Editor tooling") for how.
+
+Requires `clangd` and `python3` (stdlib only). `sicc` is found via
+`--sicc`, `$SICC`, `<workspace root>/sicc`, then `$PATH` — so opening
+files inside this repo just works once `make` has run.
+
+```elisp
+;; Emacs (eglot)
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '(sic-mode . ("~/dev/sic/tools/sic-lsp"))))
+M-x eglot
+```
+
+Notes:
+- eglot replaces the flymake backend while connected; diagnostics then
+  come from the proxy (sicc errors + clang warnings), which is a
+  superset of what `sic-flymake` reports.
+- Completion works best with parens kept balanced (paredit,
+  electric-pair-mode): `(. s fi|)` transpiles to `(s).fi`, so clangd
+  sees a member access and completes struct fields.
+- Any LSP client works the same way, e.g. Neovim:
+  `vim.lsp.start { cmd = { '/path/to/sic/tools/sic-lsp' } }` for
+  `*.sic` buffers.

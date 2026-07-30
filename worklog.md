@@ -3,6 +3,8 @@
 ## 2026-07-29
 - Emacs sic-mode: font-lock, indentation, imenu, completion, flymake
   (piggybacking on the #line markers for C diagnostics)
+- sic-lsp: LSP proxy putting clangd behind .sic buffers (completion,
+  hover, definitions, references) via the generated C and #line map
 - Rejected extra declaration forms instead of silently ignoring them
 - Made runtime goldens check exit status and exact stdout bytes
 - Made comparisons explicitly binary instead of inheriting C's chained semantics
