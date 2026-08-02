@@ -55,6 +55,11 @@
     ;; motion and \_< boundaries treat each atom as one unit.
     (dolist (c '(?# ?. ?, ?\[ ?\] ?? ?~))
       (modify-syntax-entry c "_" table))
+    ;; lisp-mode-syntax-table makes | a string quote, for Common Lisp's
+    ;; |symbols with spaces|.  sic has no such syntax and does have (| a
+    ;; b), which would otherwise open a string that runs to the next |
+    ;; or the end of the buffer.
+    (modify-syntax-entry ?| "_" table)
     table))
 
 (defconst sic-mode--syntax-propertize
