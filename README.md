@@ -49,11 +49,13 @@ spaces: `:int`, `:char**`, `:int[4]`, `:const-char*`, `:unsigned-long`,
 (set (aref a i) 0)            ;   a[i] = 0;
 (set (-> node next) NULL)     ;   node->next = NULL;
 (+= x 1)                      ; also -= *= /= %= &= |= ^= <<= >>=
+(+= (aref a i) 1)             ;   a[i] += 1; any lvalue works here too
 (++ x) (-- x)
 ```
 
-`set` is an expression: it yields the value assigned, so it chains and
-works inside a condition, which is how C's read loop is spelled.
+Every assignment form is an expression: it yields the value assigned, so
+it chains and works inside a condition, which is how C's read loop is
+spelled.
 
 ```lisp
 (while (!= (set x (getchar)) EOF)

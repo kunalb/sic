@@ -39,6 +39,13 @@ mostly comment-free. Newest entries at the bottom of each section.
   is that assignment statements emit as `(x = 1);` — the same redundant
   parens `(++i);` already carries, and the price of precedence-safe
   emission everywhere else.
+- The op-assigns (`+=`, `<<=`, ...) follow `set` on both counts: they are
+  expressions, and their place is any lvalue rather than a bare name.
+  They're the same assignment-expression in C, and a rule that took only
+  an atom made `(+= (aref a i) 1)` an error while `(set (aref a i) ...)`
+  worked — an arbitrary split with nothing behind it. Nesting an
+  assignment inside a larger expression is left to taste, not forbidden
+  by the rule; sic doesn't police style elsewhere either.
 - Relational and equality operators take exactly two operands. C parses
   `a < b < c` as `(a < b) < c`, which silently gives comparison chains the
   wrong meaning; write the individual comparisons and combine them with

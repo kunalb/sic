@@ -3,6 +3,8 @@
 ## 2026-08-01
 - `set` is an expression now, so assignment works in a condition
   (`(while (!= (set x (getchar)) EOF) ...)`) and chains
+- The op-assigns match it: expressions too, and they take any lvalue
+  instead of only a bare name
 
 ## 2026-07-29
 - Emacs sic-mode: font-lock, indentation, imenu, completion, flymake

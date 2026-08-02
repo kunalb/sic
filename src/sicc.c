@@ -960,7 +960,7 @@ static const TRule TRANSPILE_RULES[] = {
     {"^#pragma$", transpile_pragma, STATEMENT},
     {"^fn$", transpile_fn, STATEMENT},
     {"^return$", transpile_return, STATEMENT},
-    {"^([-+*/%&|^]=|<<=|>>=)$", transpile_op_assign, STATEMENT},
+    {"^([-+*/%&|^]=|<<=|>>=)$", transpile_op_assign, EXPRESSION},
     {"^(\\+\\+|--)$", transpile_incdec, EXPRESSION},
     {"^(\\+|-|\\*|/|%|<|>|<=|>=|==|!=|&&|\\|\\||&|\\||\\^|<<|>>|!|~|,)$",
      transpile_binary_op, EXPRESSION},
@@ -1134,16 +1134,16 @@ void transpile_cast(Obj *o, CCode *code) {
 };
 
 void transpile_op_assign(Obj *o, CCode *code) {
-  if (o->sexp->len != 3 || o->sexp->buffer[1]->tag != ATOM) {
-    fail_at(o->beg, "'%s' needs a name and a value, e.g. (%s x 1)",
+  if (o->sexp->len != 3) {
+    fail_at(o->beg, "'%s' needs a place and a value, e.g. (%s x 1)",
             o->sexp->buffer[0]->atom->buffer, o->sexp->buffer[0]->atom->buffer);
   }
 
-  ccode_mark_line(code, o);
-  ccode_printf_line(code, "%s %s ", o->sexp->buffer[1]->atom->buffer,
-                    o->sexp->buffer[0]->atom->buffer);
+  ccode_append(code, "(");
+  transpile_expression(o->sexp->buffer[1], code);
+  ccode_append(code, " %s ", o->sexp->buffer[0]->atom->buffer);
   transpile_expression(o->sexp->buffer[2], code);
-  ccode_append(code, ";");
+  ccode_append(code, ")");
 };
 
 void transpile_deref(Obj *o, CCode *code) {
