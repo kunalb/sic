@@ -968,7 +968,7 @@ static const TRule TRANSPILE_RULES[] = {
     {"^aref$", transpile_aref, EXPRESSION},
     {"^(->|\\.)$", transpile_member, EXPRESSION},
     {"^decl$", transpile_decl, STATEMENT},
-    {"^set$", transpile_set, STATEMENT},
+    {"^set$", transpile_set, EXPRESSION},
     {"^while$", transpile_while, STATEMENT},
     {"^for$", transpile_for, STATEMENT},
     {"^if$", transpile_if, STATEMENT},
@@ -1058,12 +1058,11 @@ void transpile_set(Obj *o, CCode *code) {
     fail_at(o->beg, "set needs a place and a value, e.g. (set x 1)");
   }
 
-  ccode_mark_line(code, o);
-  ccode_printf_line(code, "");
+  ccode_append(code, "(");
   transpile_expression(o->sexp->buffer[1], code);
   ccode_append(code, " = ");
   transpile_expression(o->sexp->buffer[2], code);
-  ccode_append(code, ";");
+  ccode_append(code, ")");
 };
 
 // Postfix operators bind tighter than the prefix forms a base expression

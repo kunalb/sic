@@ -52,6 +52,14 @@ spaces: `:int`, `:char**`, `:int[4]`, `:const-char*`, `:unsigned-long`,
 (++ x) (-- x)
 ```
 
+`set` is an expression: it yields the value assigned, so it chains and
+works inside a condition, which is how C's read loop is spelled.
+
+```lisp
+(while (!= (set x (getchar)) EOF)
+  (putchar x))                ; while (((x = getchar()) != EOF)) { ... }
+```
+
 **Initializers**: `(init ...)` is a brace initializer; elements may be
 `(.field value)` designators, and nesting works for matrices and structs
 of structs. A cast around one makes a compound literal:

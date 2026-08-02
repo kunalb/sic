@@ -1,5 +1,9 @@
 # Work Log
 
+## 2026-08-01
+- `set` is an expression now, so assignment works in a condition
+  (`(while (!= (set x (getchar)) EOF) ...)`) and chains
+
 ## 2026-07-29
 - Emacs sic-mode: font-lock, indentation, imenu, completion, flymake
   (piggybacking on the #line markers for C diagnostics)

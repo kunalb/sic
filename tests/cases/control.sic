@@ -23,6 +23,13 @@
     (if (> j 4) break)
     (printf "j=%d\n" j))
 
+  (decl vals :int[4] (init 3 1 4 0))
+  (decl k :int 0)
+  (decl v :int)
+  (while (!= (set v (aref vals k)) 0)
+    (printf "v=%d\n" v)
+    (++ k))
+
   (goto skip)
   (printf "not printed\n")
   (label skip)

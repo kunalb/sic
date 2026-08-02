@@ -30,6 +30,15 @@ mostly comment-free. Newest entries at the bottom of each section.
   an error. This keeps dispatch predictable — a head never means two
   different things depending on where it appears — so the ternary gets its
   own head (`?:`) instead of overloading `if`.
+- `set` is an expression, not a statement, so `(while (!= (set x (getchar))
+  EOF) ...)` works — C's read loop needs it, and the reason C style guides
+  distrust assignment-in-a-condition (`=` typo'd for `==`) can't happen
+  here, where the two are different heads. The head means the same thing
+  in both positions, unlike `if`/`?:`; only the trailing `;` differs, and
+  the expression-coerces-to-statement path already supplies it. The cost
+  is that assignment statements emit as `(x = 1);` — the same redundant
+  parens `(++i);` already carries, and the price of precedence-safe
+  emission everywhere else.
 - Relational and equality operators take exactly two operands. C parses
   `a < b < c` as `(a < b) < c`, which silently gives comparison chains the
   wrong meaning; write the individual comparisons and combine them with
