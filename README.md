@@ -1,4 +1,8 @@
 # The (sic) Programming Language
+
+## Status
+Pre-alpha: I'm iterating on the language as I build projects with it, experimenting with what _feels_ right while trying to keep the underlying design intentions. I have started using AI to iterate on the core of the language after writing out the original core.
+
 ## Symbolic-Expressions in C; *intentionally so*
 
 `(sic)` aims to be a minimal, extremely extensible programming language -- that transpiles to modern C -- aimed at solo hackers or small teams for rapid prototyping and quickly building reusable applications.
