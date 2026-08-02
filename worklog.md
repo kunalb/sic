@@ -5,6 +5,9 @@
   (`(while (!= (set x (getchar)) EOF) ...)`) and chains
 - The op-assigns match it: expressions too, and they take any lvalue
   instead of only a bare name
+- sic-mode: fixed `|` inheriting lisp's string-quote syntax (a bitwise
+  or opened a string), and gave operator heads their own face so Emacs
+  and the tree-sitter queries agree on what a head is
 
 ## 2026-07-29
 - Emacs sic-mode: font-lock, indentation, imenu, completion, flymake

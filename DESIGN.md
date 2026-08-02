@@ -171,3 +171,9 @@ of reimplementing analysis; `sicc` itself stays editor-ignorant.
 - Completion textEdits from clangd are dropped rather than translated —
   they're C-coordinate edits into generated text; editors fall back to
   replacing the symbol at point, which is the right behavior in sic.
+- The two highlighters classify heads the same way — keyword, builtin,
+  operator — so a file looks the same in Emacs and in a tree-sitter
+  editor. `sic-mode--operators` and the operator `#match?` pattern in
+  `highlights.scm` are the same set written twice, in the two syntaxes
+  each tool needs; they have to be edited together. `set` is a keyword
+  in both, not an operator, even though it's an assignment expression.

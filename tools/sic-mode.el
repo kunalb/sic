@@ -35,6 +35,14 @@
   '("init" "aref" "deref" "sizeof" "offsetof" "alignof")
   "Expression heads that read like operators rather than control flow.")
 
+(defconst sic-mode--operators
+  '("+" "-" "*" "/" "%" "<" ">" "<=" ">=" "==" "!=" "&&" "||" "&" "|" "^"
+    "<<" ">>" "!" "~" "," "?:" "++" "--" "->" "."
+    "+=" "-=" "*=" "/=" "%=" "&=" "|=" "^=" "<<=" ">>=")
+  "Operator heads; kept in step with the operator pattern in
+`tools/tree-sitter-sic/queries/highlights.scm'.  `set' is a keyword
+in both tools, not an operator.")
+
 (defconst sic-mode--preproc
   '("#include" "#define" "#undef" "#ifdef" "#ifndef" "#if" "#else" "#pragma")
   "Preprocessor form heads.")
@@ -75,6 +83,11 @@
      (1 font-lock-keyword-face))
     (,(concat "(" (regexp-opt sic-mode--builtins t) "\\_>")
      (1 font-lock-builtin-face))
+    ;; font-lock-operator-face arrived in Emacs 29; this mode supports 28.
+    (,(concat "(" (regexp-opt sic-mode--operators t) "\\_>")
+     (1 (if (facep 'font-lock-operator-face)
+            'font-lock-operator-face
+          'font-lock-builtin-face)))
     ("(\\(#[[:alpha:]]+\\)\\_>" (1 font-lock-preprocessor-face))
     ("\\_<\\(break\\|continue\\)\\_>" (1 font-lock-keyword-face))
     ("(\\(?:fn\\|defmacro\\)\\_>[ \t\n]+\\(\\(?:\\sw\\|\\s_\\)+\\)"
