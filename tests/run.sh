@@ -8,6 +8,18 @@ mkdir -p tests/out
 pass=0
 fail=0
 
+# Second opinion on the generated C: gcc and clang warn about different
+# things, so building with one alone leaves a whole class of warning
+# invisible (clang's -Wparentheses-equality caught doubled parens around
+# a condition that gcc is happy with). Syntax-only -- the run tier below
+# already exercises the program itself. No clang, no tier.
+have_clang=false
+if command -v clang >/dev/null 2>&1; then
+  have_clang=true
+else
+  echo "SKIP clang warning tier (clang not found)"
+fi
+
 for src in examples/*.sic tests/cases/*.sic; do
   [ -e "$src" ] || continue
   case "$src" in *.cu.sic) continue ;; esac # CUDA cases run in their own tier
@@ -32,6 +44,13 @@ for src in examples/*.sic tests/cases/*.sic; do
 
   if ! ${CC:-cc} -Wall -Werror -o "$bin" "$cfile" 2>"tests/out/$name.cc.log"; then
     echo "FAIL $name (compile, see tests/out/$name.cc.log)"
+    fail=$((fail + 1))
+    continue
+  fi
+
+  if [ "$have_clang" = true ] &&
+    ! clang -Wall -Werror -fsyntax-only "$cfile" 2>"tests/out/$name.clang.log"; then
+    echo "FAIL $name (clang warnings, see tests/out/$name.clang.log)"
     fail=$((fail + 1))
     continue
   fi

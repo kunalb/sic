@@ -20,6 +20,12 @@ mostly comment-free. Newest entries at the bottom of each section.
   itself (minus `#line` markers) is diffed against a checked-in `.c`
   file. For pinning emission details the run-tests can't observe, and
   for targets this machine can't compile or run (CUDA).
+- Every run-test case is also compiled by clang with `-Wall -Werror`
+  (syntax-only; the run tier already exercises the binary). gcc and
+  clang warn about different things, and building with one alone hid a
+  real defect for months — clang's `-Wparentheses-equality` on doubled
+  parens around a condition. Like the CUDA tier, a missing clang is a
+  SKIP, never a FAIL.
 
 ## Transpiler rules
 

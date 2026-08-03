@@ -10,6 +10,8 @@
   and the tree-sitter queries agree on what a head is
 - Stopped emitting `if ((a == b))`; conditions no longer double the
   operator's parens, which clang rejected under -Werror all along
+- Added a clang -Wall -Werror tier to the harness so compiler-specific
+  warnings in the generated C can't hide behind gcc again
 
 ## 2026-07-29
 - Emacs sic-mode: font-lock, indentation, imenu, completion, flymake
