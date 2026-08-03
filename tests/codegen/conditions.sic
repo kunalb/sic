@@ -1,0 +1,15 @@
+; if/while/do-while supply the parens C requires around a condition, so
+; an operator form there must not add a second pair -- clang reads the
+; doubled pair in if ((a == b)) as a typo'd assignment. Operands keep
+; their own parens, and every other position is untouched.
+(fn check :int (a :int b :int c :int d :int)
+  (if (== a b) (return 1))
+  (if (&& (== a b) (< c d)) (return 2))
+  (if (! c) (return 3))
+  (while (!= a b) (++ a))
+  (do-while (== a b) (++ a))
+  (for (decl i :int 0) (== i c) (++ i) (++ b))
+  (decl t :int (?: (== a b) 1 0))
+  (decl e :int (== a b))
+  (if a (return 4))
+  (return t))

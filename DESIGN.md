@@ -46,6 +46,16 @@ mostly comment-free. Newest entries at the bottom of each section.
   worked — an arbitrary split with nothing behind it. Nesting an
   assignment inside a larger expression is left to taste, not forbidden
   by the rule; sic doesn't police style elsewhere either.
+- Operator forms parenthesize themselves, so precedence can never
+  surprise — but `if`/`while`/`do-while` already emit the pair C
+  requires around a condition, and the two together produced
+  `if ((a == b))`. clang reads that doubled pair as a typo'd assignment
+  and warns. Those three sites emit the condition through
+  `transpile_condition`, which drops the operator's own pair; operands
+  keep theirs, so `(&& (== a b) (< c d))` is still
+  `(a == b) && (c < d)`. `for`, `?:` and initializers are untouched:
+  their parens delimit nothing, so a single pair is just an ordinary
+  parenthesized expression.
 - Relational and equality operators take exactly two operands. C parses
   `a < b < c` as `(a < b) < c`, which silently gives comparison chains the
   wrong meaning; write the individual comparisons and combine them with

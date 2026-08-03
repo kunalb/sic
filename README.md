@@ -63,7 +63,7 @@ spelled.
 
 ```lisp
 (while (!= (set x (getchar)) EOF)
-  (putchar x))                ; while (((x = getchar()) != EOF)) { ... }
+  (putchar x))                ; while ((x = getchar()) != EOF) { ... }
 ```
 
 **Initializers**: `(init ...)` is a brace initializer; elements may be

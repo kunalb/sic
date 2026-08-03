@@ -119,6 +119,7 @@ void transpile_cast(Obj *o, CCode *code);
 void transpile_op_assign(Obj *o, CCode *code);
 void transpile_statement(Obj *o, CCode *code);
 void transpile_expression(Obj *o, CCode *code);
+void transpile_condition(Obj *o, CCode *code);
 void transpile_for(Obj *o, CCode *code);
 void transpile_if(Obj *o, CCode *code);
 void transpile_do(Obj *o, CCode *code);
@@ -989,7 +990,38 @@ static const TRule TRANSPILE_RULES[] = {
 };
 #define TRANSPILE_RULE_LEN (sizeof(TRANSPILE_RULES) / sizeof(TRule))
 
-void transpile_binary_op(Obj *o, CCode *code) {
+// The first rule whose regex matches the head decides what a form is.
+// Every lookup goes through here, so the table stays the one place that
+// says which head means which rule.
+static const TRule *rule_for(const char *head) {
+  static regex_t TRANSPILE_REGEXES[TRANSPILE_RULE_LEN];
+  static bool initialized = false;
+  if (!initialized) {
+    for (size_t i = 0; i < TRANSPILE_RULE_LEN; i++) {
+#ifdef DEBUG
+      printf("REGEX: %s\n", TRANSPILE_RULES[i].match);
+#endif
+      if (regcomp(&TRANSPILE_REGEXES[i], TRANSPILE_RULES[i].match,
+                  REG_EXTENDED | REG_NOSUB) != 0) {
+        fprintf(stderr, "internal error: bad rule regex '%s'\n",
+                TRANSPILE_RULES[i].match);
+        exit(EXIT_FAILURE);
+      }
+    }
+    initialized = true;
+  }
+
+  for (size_t i = 0; i < TRANSPILE_RULE_LEN; i++) {
+    if (regexec(&TRANSPILE_REGEXES[i], head, 0, NULL, 0) != REG_NOMATCH) {
+      return &TRANSPILE_RULES[i];
+    }
+  }
+  return NULL;
+}
+
+// `parens` is false only where the caller already emits the pair C
+// requires, so the operator doesn't add a second, redundant one.
+static void binary_op_emit(Obj *o, CCode *code, bool parens) {
   char *op = o->sexp->buffer[0]->atom->buffer;
   bool prefix_ok = op[1] == '\0' && strchr("+-*&!~", op[0]) != NULL;
   bool prefix_only = op[1] == '\0' && (op[0] == '!' || op[0] == '~');
@@ -998,9 +1030,14 @@ void transpile_binary_op(Obj *o, CCode *code) {
                     strcmp(op, "==") == 0 || strcmp(op, "!=") == 0;
 
   if (o->sexp->len == 2 && prefix_ok) {
-    ccode_append(code, "(%s", op);
+    if (parens) {
+      ccode_append(code, "(");
+    }
+    ccode_append(code, "%s", op);
     transpile_expression(o->sexp->buffer[1], code);
-    ccode_append(code, ")");
+    if (parens) {
+      ccode_append(code, ")");
+    }
     return;
   }
 
@@ -1014,14 +1051,35 @@ void transpile_binary_op(Obj *o, CCode *code) {
     fail_at(o->beg, "operator '%s' needs at least two operands", op);
   }
 
-  ccode_append(code, "(");
+  if (parens) {
+    ccode_append(code, "(");
+  }
   for (size_t i = 1; i < o->sexp->len; i++) {
     if (i != 1) {
       ccode_append(code, " %s ", op);
     }
     transpile_expression(o->sexp->buffer[i], code);
   }
-  ccode_append(code, ")");
+  if (parens) {
+    ccode_append(code, ")");
+  }
+}
+
+void transpile_binary_op(Obj *o, CCode *code) { binary_op_emit(o, code, true); }
+
+// if/while/do-while already wrap the condition in the parens C requires,
+// so an operator form there would emit a second pair. Beyond being noise,
+// clang reads the doubled pair in if ((a == b)) as a typo'd assignment
+// and warns (-Wparentheses-equality).
+void transpile_condition(Obj *o, CCode *code) {
+  if (o->tag == SEXP && o->sexp->len > 0 && o->sexp->buffer[0]->tag == ATOM) {
+    const TRule *rule = rule_for(o->sexp->buffer[0]->atom->buffer);
+    if (rule != NULL && rule->fn == transpile_binary_op) {
+      binary_op_emit(o, code, false);
+      return;
+    }
+  }
+  transpile_expression(o, code);
 }
 
 void transpile_incdec(Obj *o, CCode *code) {
@@ -1113,7 +1171,7 @@ void transpile_while(Obj *o, CCode *code) {
 
   ccode_mark_line(code, o);
   ccode_printf_line(code, "while (");
-  transpile_expression(o->sexp->buffer[1], code);
+  transpile_condition(o->sexp->buffer[1], code);
   ccode_append(code, ") {");
   for (size_t i = 2; i < o->sexp->len; i++) {
     transpile_statement(o->sexp->buffer[i], code);
@@ -1385,7 +1443,7 @@ void transpile_if(Obj *o, CCode *code) {
 
   ccode_mark_line(code, o);
   ccode_printf_line(code, "if (");
-  transpile_expression(o->sexp->buffer[1], code);
+  transpile_condition(o->sexp->buffer[1], code);
   ccode_append(code, ") {");
   transpile_statement(o->sexp->buffer[2], code);
   if (o->sexp->len == 4) {
@@ -1536,7 +1594,7 @@ void transpile_do_while(Obj *o, CCode *code) {
     transpile_statement(o->sexp->buffer[i], code);
   }
   ccode_printf_line(code, "} while (");
-  transpile_expression(o->sexp->buffer[1], code);
+  transpile_condition(o->sexp->buffer[1], code);
   ccode_append(code, ");");
 }
 
@@ -1650,23 +1708,6 @@ void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {
   obj_print(o);
 #endif
 
-  static regex_t TRANSPILE_REGEXES[TRANSPILE_RULE_LEN];
-  static bool initialized = false;
-  if (!initialized) {
-    for (size_t i = 0; i < TRANSPILE_RULE_LEN; i++) {
-#ifdef DEBUG
-      printf("REGEX: %s\n", TRANSPILE_RULES[i].match);
-#endif
-      if (regcomp(&TRANSPILE_REGEXES[i], TRANSPILE_RULES[i].match,
-                  REG_EXTENDED | REG_NOSUB) != 0) {
-        fprintf(stderr, "internal error: bad rule regex '%s'\n",
-                TRANSPILE_RULES[i].match);
-        exit(EXIT_FAILURE);
-      }
-    }
-    initialized = true;
-  }
-
   if (o->tag == SEXP) {
     if (o->sexp->len == 0) {
       fail_at(o->beg, "empty expression '()'");
@@ -1685,32 +1726,26 @@ void transpile_obj(Obj *o, CCode *code, RuleContext ctx) {
     }
 
     char *head = o->sexp->buffer[0]->atom->buffer;
-    for (size_t i = 0; i < TRANSPILE_RULE_LEN; i++) {
-      int result = regexec(&TRANSPILE_REGEXES[i], head, 0, NULL, 0);
-      if (result == REG_NOMATCH) {
-        continue;
-      }
-
-      if (ctx == EXPRESSION && (TRANSPILE_RULES[i].ctx & EXPRESSION) == 0) {
-        fail_at(o->beg, "'%s' is a statement and has no value here", head);
-      }
-
-      bool as_statement =
-          ctx == STATEMENT && (TRANSPILE_RULES[i].ctx & STATEMENT) == 0;
-      if (as_statement) {
-        ccode_mark_line(code, o);
-        ccode_printf_line(code, "");
-      }
-
-      TRANSPILE_RULES[i].fn(o, code);
-
-      if (as_statement) {
-        ccode_append(code, ";");
-      }
-      return;
+    const TRule *rule = rule_for(head);
+    if (rule == NULL) {
+      fail_at(o->beg, "no rule matches '%s' here", head);
     }
 
-    fail_at(o->beg, "no rule matches '%s' here", head);
+    if (ctx == EXPRESSION && (rule->ctx & EXPRESSION) == 0) {
+      fail_at(o->beg, "'%s' is a statement and has no value here", head);
+    }
+
+    bool as_statement = ctx == STATEMENT && (rule->ctx & STATEMENT) == 0;
+    if (as_statement) {
+      ccode_mark_line(code, o);
+      ccode_printf_line(code, "");
+    }
+
+    rule->fn(o, code);
+
+    if (as_statement) {
+      ccode_append(code, ";");
+    }
   } else {
     if (ctx == STATEMENT) {
       ccode_mark_line(code, o);

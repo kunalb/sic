@@ -8,6 +8,8 @@
 - sic-mode: fixed `|` inheriting lisp's string-quote syntax (a bitwise
   or opened a string), and gave operator heads their own face so Emacs
   and the tree-sitter queries agree on what a head is
+- Stopped emitting `if ((a == b))`; conditions no longer double the
+  operator's parens, which clang rejected under -Werror all along
 
 ## 2026-07-29
 - Emacs sic-mode: font-lock, indentation, imenu, completion, flymake
